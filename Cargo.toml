@@ -1,7 +1,14 @@
 [package]
 name = "port-tester"
 version = "0.1.0"
+description = "A command line tool to test open ports."
+categories = ["command-line-utilities", "network-programming"]
+authors = ["Chad Eldridge <chad.eldridge@gmail.com>"]
+homepage = "https://github.com/celdridge/port-tester"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/celdridge/port-tester"
 edition = "2024"
+rust-version = "1.85"
 
 [[bin]]
 name = "pt"
