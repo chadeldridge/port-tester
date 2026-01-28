@@ -1,0 +1,58 @@
+name: Changlelog fragment check
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+jobs:
+  check-news-fragments:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Install Towncrier
+        run: |
+          python -m venv towncrier_check
+          source towncrier_check/bin/activate
+          python -m pip install towncrier
+      - name: Verify Towncrier entry added
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_BRANCH: ${{ github.base_ref }}
+          #BASE_BRANCH: "main"
+        run: |
+          # Skip when 'no-changelog' label is present
+          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'no-changelog') }}" == "true" ]]; then
+            echo "Skipping changelog check"
+            exit 0
+          fi
+          VERSION="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
+          # Fetch the pull request' base branch so towncrier will be able to
+          # compare the current branch with the base branch.
+          # Source: https://github.com/actions/checkout/#fetch-all-branches.
+          git fetch --no-tags origin +refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}
+          source towncrier_check/bin/activate
+          towncrier check --compare-with origin/${BASE_BRANCH}
+          towncrier build --version "${VERSION}" --draft
+
+#      - name: Check for changelog fragment
+#        uses: actions/setup-python@v5
+#        with:
+#          python-version: "3.x"
+#      - name: Install towncrier
+#        run: pip install towncrier
+#      - name: Check for news fragment unless 'no-changelog' label is present
+#        run: |
+#          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'no-changelog') }}" == "true" ]]; then
+#            echo "Skipping changelog check"
+#            exit 0
+#          fi
+#          towncrier check
+#          if git diff --name-only origin/${{ github.base_ref }}...HEAD \
+#            | grep -q '^changelog.d/.*\.md$'; then
+#            echo "Changelog fragment found."
+#          else
+#            echo "::error::Missing changelog fragment in changelog.d/"
+#            exit 1
+#          fi
