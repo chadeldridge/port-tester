@@ -77,6 +77,8 @@ jobs:
   changelog:
     name: Build and commit changelog
     runs-on: ubuntu-latest
+    needs:
+      - crate_metadata
     steps:
       - name: Git Checkout
         uses: actions/checkout@v6
@@ -115,7 +117,13 @@ jobs:
   build:
     name: ${{ matrix.job.target }} (${{ matrix.job.os }})
     runs-on: ${{ matrix.job.os }}
-    needs: crate_metadata
+    # Do not run build unless all other checks have completed.
+    needs:
+      - crate_metadata
+      - lint
+      - test
+      - audit
+      - changelog
     strategy:
       fail-fast: false
       matrix:
@@ -235,11 +243,11 @@ jobs:
       # Run binary test against 8.8.8.8. Return code indicates success.
       - name: Run pt
         shell: bash
-        run: $BUILD_CMD run --locked --target=${{ matrix.job.target }} pt -- 8.8.8.8 -c 1 -s
+        run: $BUILD_CMD run --locked --target=${{ matrix.job.target }} -- 8.8.8.8 -c 1 -s
       # Run binary test against 8.8.8.8 port 53. Return code indicates success.
       - name: Run pt port 53
         shell: bash
-        run: $BUILD_CMD run --locked --target=${{ matrix.job.target }} pt -- 8.8.8.8 53 -c 1 -s
+        run: $BUILD_CMD run --locked --target=${{ matrix.job.target }} -- 8.8.8.8 53 -c 1 -s
       # Creates a tarball or zip file containing the built binary and other assets for each build type.
       - name: Create tarball
         id: package
