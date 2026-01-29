@@ -121,7 +121,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - run: rustup update stable && rustup default stable
-      - run: cargo update -p cargo --locked
+      - run: cargo update -p port-tester --locked
 
   test:
     name: Run Tests
