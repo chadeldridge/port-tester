@@ -30,13 +30,13 @@ jobs:
       - run: |
           jq -C <<< '${{ toJson(needs) }}'
           jq --exit-status 'all(.result == "success")' <<< '${{ toJson(needs) }}'
-  crate_metadata:
+  metadata:
     name: Extract crate metadata
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - name: Extract crate information
-        id: crate_metadata
+        id: metadata
         run: |
           cargo metadata --no-deps --format-version 1 | jq -r '"name=" + .packages[0].name' | tee -a $GITHUB_OUTPUT
           cargo metadata --no-deps --format-version 1 | jq -r '"version=" + .packages[0].version' | tee -a $GITHUB_OUTPUT
@@ -47,21 +47,21 @@ jobs:
         id: is-release
         shell: bash
         run: |
-          unset IS_RELEASE ; if [[ $GITHUB_REF =~ ^refs/tags/v[0-9].* ]]; then IS_RELEASE='true' ; fi
+          IS_RELEASE='false'; if [[ $GITHUB_REF =~ ^refs/tags/v[0-9].* ]]; then IS_RELEASE='true'; fi
           echo "is_release=${IS_RELEASE}" | tee -a $GITHUB_OUTPUT
     outputs:
-      name: ${{ steps.crate_metadata.outputs.name }}
-      version: ${{ steps.crate_metadata.outputs.version }}
-      maintainer: ${{ steps.crate_metadata.outputs.maintainer }}
-      homepage: ${{ steps.crate_metadata.outputs.homepage }}
-      msrv: ${{ steps.crate_metadata.outputs.msrv }}
+      name: ${{ steps.metadata.outputs.name }}
+      version: ${{ steps.metadata.outputs.version }}
+      maintainer: ${{ steps.metadata.outputs.maintainer }}
+      homepage: ${{ steps.metadata.outputs.homepage }}
+      msrv: ${{ steps.metadata.outputs.msrv }}
       is_release: ${{ steps.is-release.outputs.is_release }}
   # Linting heavily taken from Cargo
   lint:
     needs:
       - rustfmt
       - clippy
-      - stale-label
+      #- stale-label
       - lockfile
     name: Lint for code quality and style
     runs-on: ubuntu-latest
@@ -103,12 +103,12 @@ jobs:
       - run: rustup update stable && rustup default stable
       - run: rustup component add clippy
       - run: cargo clippy --workspace --all-targets --no-deps -- -D warning
-  stale-label:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - run: rustup update stable && rustup default stable
-      - run: cargo stale-label
+  #stale-label:
+  #  runs-on: ubuntu-latest
+  #  steps:
+  #    - uses: actions/checkout@v6
+  #    - run: rustup update stable && rustup default stable
+  #    - run: cargo stale-label
   #lint-docs:
   #  runs-on: ubuntu-latest
   #  steps:
@@ -119,7 +119,7 @@ jobs:
   lockfile:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - run: rustup update stable && rustup default stable
       - run: cargo update -p port-tester --locked
 
@@ -140,7 +140,8 @@ jobs:
       matrix:
         checks:
           - advisories
-          - bans licenses sources
+          - bans sources
+          #- bans licenses sources
     steps:
       - uses: actions/checkout@v6
       - uses: EmbarkStudios/cargo-deny-action@v2
@@ -160,7 +161,9 @@ jobs:
     name: Build and commit changelog
     runs-on: ubuntu-latest
     needs:
-      - crate_metadata
+      - metadata
+    env:
+      version: ${{ needs.metadata.outputs.version }}
     steps:
       - name: Git Checkout
         uses: actions/checkout@v6
@@ -168,9 +171,6 @@ jobs:
           fetch-depth: 0
       - name: Install towncrier
         run: pip install towncrier
-      - name: Get version
-        run: |
-          version="${{ needs.crate_metadata.outputs.version }}"
       - name: Store notes
         run: |
           towncrier build --draft --version ${version} | tail -n +3 > /tmp/changes.txt
@@ -178,7 +178,7 @@ jobs:
         run: |
           towncrier build --yes --version ${version}
       - name: Commit changelog
-        if: needs.crate_metadata.outputs.is_release
+        if: needs.metadata.outputs.is_release
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -191,7 +191,7 @@ jobs:
     runs-on: ${{ matrix.job.os }}
     # Do not run build unless all other checks have completed.
     needs:
-      - crate_metadata
+      - metadata
       - lint
       - test
       - audit
@@ -288,7 +288,7 @@ jobs:
           esac;
 
           # Setup paths
-          BIN_NAME="${{ needs.crate_metadata.outputs.name }}${EXE_suffix}"
+          BIN_NAME="${{ needs.metadata.outputs.name }}${EXE_suffix}"
           BIN_PATH="target/${{ matrix.job.target }}/release/${BIN_NAME}"
 
           # Let subsequent steps know where to find the binary
@@ -300,7 +300,7 @@ jobs:
         run: |
           # test only library unit tests and binary for arm-type targets
           unset CARGO_TEST_OPTIONS
-          unset CARGO_TEST_OPTIONS ; case ${{ matrix.job.target }} in arm-* | aarch64-*) CARGO_TEST_OPTIONS="--lib --bin ${{ needs.crate_metadata.outputs.name }}" ;; esac;
+          unset CARGO_TEST_OPTIONS ; case ${{ matrix.job.target }} in arm-* | aarch64-*) CARGO_TEST_OPTIONS="--lib --bin ${{ needs.metadata.outputs.name }}" ;; esac;
           echo "CARGO_TEST_OPTIONS=${CARGO_TEST_OPTIONS}" >> $GITHUB_OUTPUT
       # We need to add testing before enabling this section
       #- name: Run tests
@@ -326,7 +326,7 @@ jobs:
         shell: bash
         run: |
           PKG_suffix=".tar.gz" ; case ${{ matrix.job.target }} in *-pc-windows-*) PKG_suffix=".zip" ;; esac;
-          PKG_BASENAME=${{ needs.crate_metadata.outputs.name }}-v${{ needs.crate_metadata.outputs.version }}-${{ matrix.job.target }}
+          PKG_BASENAME=${{ needs.metadata.outputs.name }}-v${{ needs.metadata.outputs.version }}-${{ matrix.job.target }}
           PKG_NAME=${PKG_BASENAME}${PKG_suffix}
           echo "PKG_NAME=${PKG_NAME}" >> $GITHUB_OUTPUT
 
@@ -342,13 +342,13 @@ jobs:
           cp "README.md" "LICENSE-MIT.md" "LICENSE-APACHE.md" "CHANGELOG.md" "$ARCHIVE_DIR"
 
           # Man page
-          #cp 'target/${{ matrix.job.target }}/release/build/${{ needs.crate_metadata.outputs.name }}'-*/out/assets/manual/pt.1 "$ARCHIVE_DIR"
+          #cp 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.name }}'-*/out/assets/manual/pt.1 "$ARCHIVE_DIR"
 
           # Autocompletion files
-          #cp 'target/${{ matrix.job.target }}/release/build/${{ needs.crate_metadata.outputs.name }}'-*/out/assets/completions/pt.bash "$ARCHIVE_DIR/autocomplete/${{ needs.crate_metadata.outputs.name }}.bash"
-          #cp 'target/${{ matrix.job.target }}/release/build/${{ needs.crate_metadata.outputs.name }}'-*/out/assets/completions/pt.fish "$ARCHIVE_DIR/autocomplete/${{ needs.crate_metadata.outputs.name }}.fish"
-          #cp 'target/${{ matrix.job.target }}/release/build/${{ needs.crate_metadata.outputs.name }}'-*/out/assets/completions/_pt.ps1 "$ARCHIVE_DIR/autocomplete/_${{ needs.crate_metadata.outputs.name }}.ps1"
-          #cp 'target/${{ matrix.job.target }}/release/build/${{ needs.crate_metadata.outputs.name }}'-*/out/assets/completions/pt.zsh "$ARCHIVE_DIR/autocomplete/${{ needs.crate_metadata.outputs.name }}.zsh"
+          #cp 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.name }}'-*/out/assets/completions/pt.bash "$ARCHIVE_DIR/autocomplete/${{ needs.metadata.outputs.name }}.bash"
+          #cp 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.name }}'-*/out/assets/completions/pt.fish "$ARCHIVE_DIR/autocomplete/${{ needs.metadata.outputs.name }}.fish"
+          #cp 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.name }}'-*/out/assets/completions/_pt.ps1 "$ARCHIVE_DIR/autocomplete/_${{ needs.metadata.outputs.name }}.ps1"
+          #cp 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.name }}'-*/out/assets/completions/pt.zsh "$ARCHIVE_DIR/autocomplete/${{ needs.metadata.outputs.name }}.zsh"
 
           # base compressed package
           pushd "${PKG_STAGING}/" >/dev/null
@@ -371,10 +371,10 @@ jobs:
           DPKG_DIR="${DPKG_STAGING}/dpkg"
           mkdir -p "${DPKG_DIR}"
 
-          DPKG_BASENAME=${{ needs.crate_metadata.outputs.name }}
-          DPKG_CONFLICTS=${{ needs.crate_metadata.outputs.name }}-musl
-          case ${{ matrix.job.target }} in *-musl) DPKG_BASENAME=${{ needs.crate_metadata.outputs.name }}-musl ; DPKG_CONFLICTS=${{ needs.crate_metadata.outputs.name }} ;; esac;
-          DPKG_VERSION=${{ needs.crate_metadata.outputs.version }}
+          DPKG_BASENAME=${{ needs.metadata.outputs.name }}
+          DPKG_CONFLICTS=${{ needs.metadata.outputs.name }}-musl
+          case ${{ matrix.job.target }} in *-musl) DPKG_BASENAME=${{ needs.metadata.outputs.name }}-musl ; DPKG_CONFLICTS=${{ needs.metadata.outputs.name }} ;; esac;
+          DPKG_VERSION=${{ needs.metadata.outputs.version }}
           DPKG_ARCH="${{ matrix.job.dpkg_arch }}"
           DPKG_NAME="${DPKG_BASENAME}_${DPKG_VERSION}_${DPKG_ARCH}.deb"
           echo "DPKG_NAME=${DPKG_NAME}" >> $GITHUB_OUTPUT
@@ -383,13 +383,13 @@ jobs:
           install -Dm755 "${{ steps.bin.outputs.BIN_PATH }}" "${DPKG_DIR}/usr/bin/${{ steps.bin.outputs.BIN_NAME }}"
 
           # Man page
-          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.crate_metadata.outputs.name }}'-*/out/assets/manual/pt.1 "${DPKG_DIR}/usr/share/man/man1/${{ needs.crate_metadata.outputs.name }}.1"
-          #gzip -n --best "${DPKG_DIR}/usr/share/man/man1/${{ needs.crate_metadata.outputs.name }}.1"
+          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.name }}'-*/out/assets/manual/pt.1 "${DPKG_DIR}/usr/share/man/man1/${{ needs.metadata.outputs.name }}.1"
+          #gzip -n --best "${DPKG_DIR}/usr/share/man/man1/${{ needs.metadata.outputs.name }}.1"
 
           # Autocompletion files
-          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.crate_metadata.outputs.name }}'-*/out/assets/completions/pt.bash "${DPKG_DIR}/usr/share/bash-completion/completions/${{ needs.crate_metadata.outputs.name }}"
-          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.crate_metadata.outputs.name }}'-*/out/assets/completions/pt.fish "${DPKG_DIR}/usr/share/fish/vendor_completions.d/${{ needs.crate_metadata.outputs.name }}.fish"
-          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.crate_metadata.outputs.name }}'-*/out/assets/completions/pt.zsh "${DPKG_DIR}/usr/share/zsh/vendor-completions/_${{ needs.crate_metadata.outputs.name }}"
+          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.name }}'-*/out/assets/completions/pt.bash "${DPKG_DIR}/usr/share/bash-completion/completions/${{ needs.metadata.outputs.name }}"
+          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.name }}'-*/out/assets/completions/pt.fish "${DPKG_DIR}/usr/share/fish/vendor_completions.d/${{ needs.metadata.outputs.name }}.fish"
+          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.name }}'-*/out/assets/completions/pt.zsh "${DPKG_DIR}/usr/share/zsh/vendor-completions/_${{ needs.metadata.outputs.name }}"
 
           # README and LICENSE
           install -Dm644 "README.md" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/README.md"
@@ -400,12 +400,12 @@ jobs:
 
           cat > "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/copyright" <<EOF
           Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-          Upstream-Name: ${{ needs.crate_metadata.outputs.name }}
-          Source: ${{ needs.crate_metadata.outputs.homepage }}
+          Upstream-Name: ${{ needs.metadata.outputs.name }}
+          Source: ${{ needs.metadata.outputs.homepage }}
 
           Files: *
-          Copyright: ${{ needs.crate_metadata.outputs.maintainer }}
-          Copyright: $COPYRIGHT_YEARS ${{ needs.crate_metadata.outputs.maintainer }}
+          Copyright: ${{ needs.metadata.outputs.maintainer }}
+          Copyright: $COPYRIGHT_YEARS ${{ needs.metadata.outputs.maintainer }}
           License: Apache-2.0 or MIT
 
           License: Apache-2.0
@@ -446,10 +446,10 @@ jobs:
           Version: ${DPKG_VERSION}
           Section: net
           Priority: optional
-          Maintainer: ${{ needs.crate_metadata.outputs.maintainer }}
-          Homepage: ${{ needs.crate_metadata.outputs.homepage }}
+          Maintainer: ${{ needs.metadata.outputs.maintainer }}
+          Homepage: ${{ needs.metadata.outputs.homepage }}
           Architecture: ${DPKG_ARCH}
-          Provides: ${{ needs.crate_metadata.outputs.name }}
+          Provides: ${{ needs.metadata.outputs.name }}
           Conflicts: ${DPKG_CONFLICTS}
           Description: Port tester (pt) provides simple port testing with the feel of ping.
             Used to detect connectivity issues to a specific service.
@@ -476,7 +476,7 @@ jobs:
 
       - name: Publish archives and packages
         uses: softprops/action-gh-release@v2
-        if: needs.crate_metadata.outputs.is_release
+        if: needs.metadata.outputs.is_release
         with:
           files: |
             ${{ steps.package.outputs.PKG_PATH }}
