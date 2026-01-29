@@ -11,7 +11,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Install Towncrier
+      - name: Install towncrier
         run: |
           python -m venv towncrier_check
           source towncrier_check/bin/activate

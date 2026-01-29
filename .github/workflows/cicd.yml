@@ -27,7 +27,9 @@ jobs:
       - changelog
       - build
     steps:
-      - run: jq --exit-status 'all(.result == "success")' <<< '${{ toJson(needs) }}'
+      - run: |
+          jq -C <<< '${{ toJson(needs) }}'
+          jq --exit-status 'all(.result == "success")' <<< '${{ toJson(needs) }}'
   crate_metadata:
     name: Extract crate metadata
     runs-on: ubuntu-latest
@@ -41,26 +43,86 @@ jobs:
           cargo metadata --no-deps --format-version 1 | jq -r '"maintainer=" + .packages[0].authors[0]' | tee -a $GITHUB_OUTPUT
           cargo metadata --no-deps --format-version 1 | jq -r '"homepage=" + .packages[0].homepage' | tee -a $GITHUB_OUTPUT
           cargo metadata --no-deps --format-version 1 | jq -r '"msrv=" + .packages[0].rust_version' | tee -a $GITHUB_OUTPUT
+      - name: Check for release
+        id: is-release
+        shell: bash
+        run: |
+          unset IS_RELEASE ; if [[ $GITHUB_REF =~ ^refs/tags/v[0-9].* ]]; then IS_RELEASE='true' ; fi
+          echo "is_release=${IS_RELEASE}" | tee -a $GITHUB_OUTPUT
     outputs:
       name: ${{ steps.crate_metadata.outputs.name }}
       version: ${{ steps.crate_metadata.outputs.version }}
       maintainer: ${{ steps.crate_metadata.outputs.maintainer }}
       homepage: ${{ steps.crate_metadata.outputs.homepage }}
       msrv: ${{ steps.crate_metadata.outputs.msrv }}
+      is_release: ${{ steps.is-release.outputs.is_release }}
+  # Linting heavily taken from Cargo
   lint:
+    needs:
+      - rustfmt
+      - clippy
+      - stale-label
+      - lockfile
     name: Lint for code quality and style
     runs-on: ubuntu-latest
     steps:
-      - name: Install Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt,clippy
+      - name: Linting results
+        run: |
+          jq -C <<< '${{ toJson(needs) }}'
+          jq --exit-status 'all(.result == "success")' <<< '${{ toJson(needs) }}'
+  rustfmt:
+    name: Lint for code quality and style
+    runs-on: ubuntu-latest
+    steps:
+      #- name: Install Rust Toolchain
+      #  uses: dtolnay/rust-toolchain@stable
+      #  with:
+      #    components: rustfmt,clippy
       - name: Git Checkout
         uses: actions/checkout@v6
+      - run: rustup update stable && rustup default stable
+      - run: rustup component add rustfmt
       - name: Run formatter
-        run: cargo fmt -- --check
-      - name: Run Clippy
-        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+        run: cargo fmt --all --check
+      #- name: Run Clippy
+      #  run: cargo clippy --locked --all-targets --all-features -- -D warnings
+  clippy:
+    strategy:
+      matrix:
+        include:
+          - name: Linux x86_64
+            os: ubuntu-latest
+          - name: macOS aarch64
+            os: macos-14
+          - name: Windows x86_64 MSVC
+            os: windows-latest
+    name: Clippy ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - run: rustup update stable && rustup default stable
+      - run: rustup component add clippy
+      - run: cargo clippy --workspace --all-targets --no-deps -- -D warning
+  stale-label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup update stable && rustup default stable
+      - run: cargo stale-label
+  #lint-docs:
+  #  runs-on: ubuntu-latest
+  #  steps:
+  #    - uses: actions/checkout@v5
+  #    - run: rustup update stable && rustup default stable
+  #    - run: cargo lint-docs --check
+  # Ensure Cargo.lock is up-to-date
+  lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup update stable && rustup default stable
+      - run: cargo update -p cargo --locked
+
   test:
     name: Run Tests
     runs-on: ubuntu-latest
@@ -74,13 +136,26 @@ jobs:
   audit:
     name: Cargo Audit
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        checks:
+          - advisories
+          - bans licenses sources
     steps:
-      - name: Install Cargo Audit
-        run: cargo install cargo-audit --locked
-      - name: Git Checkout
-        uses: actions/checkout@v6
-      - name: Run Cargo Audit
-        run: cargo audit
+      - uses: actions/checkout@v6
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        # Prevent sudden announcement of a new advisory from failing ci:
+        continue-on-error: ${{ matrix.checks == 'advisories' }}
+        with:
+          command: check ${{ matrix.checks }}
+          rust-version: stable
+  #    steps:
+  #      - name: Install Cargo Audit
+  #        run: cargo install cargo-audit --locked
+  #      - name: Git Checkout
+  #        uses: actions/checkout@v6
+  #      - name: Run Cargo Audit
+  #        run: cargo audit
   changelog:
     name: Build and commit changelog
     runs-on: ubuntu-latest
@@ -89,38 +164,28 @@ jobs:
     steps:
       - name: Git Checkout
         uses: actions/checkout@v6
-      - name: Install Towncrier
+        with:
+          fetch-depth: 0
+      - name: Install towncrier
         run: pip install towncrier
+      - name: Get version
+        run: |
+          version="${{ needs.crate_metadata.outputs.version }}"
+      - name: Store notes
+        run: |
+          towncrier build --draft --version ${version} | tail -n +3 > /tmp/changes.txt
       - name: Build changelog
         run: |
-          towncrier build --yes --version ${{ needs.crate_metadata.outputs.version }}
-      #- name: Append PR metadata to changelog
-      #  env:
-      #    GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #  run: |
-      #    VERSION="${GITHUB_REF#refs/tags/v}"
-      #
-      #    PRS=$(gh pr list \
-      #      --state merged \
-      #      --base master \
-      #      --search "merged:>$(git describe --tags --abbrev=0 HEAD^)" \
-      #      --json number,author,title)
-      #
-      #    for pr in $(echo "$PRS" | jq -c '.[]'); do
-      #      num=$(echo "$pr" | jq -r '.number')
-      #      user=$(echo "$pr" | jq -r '.author.login')
-      #      title=$(echo "$pr" | jq -r '.title')
-      #
-      #      sed -i \
-      #        "s|$title|$title #$num (@$user)|" \
-      #        CHANGELOG.md
-      #    done
+          towncrier build --yes --version ${version}
       - name: Commit changelog
+        if: needs.crate_metadata.outputs.is_release
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git commit -am "chore: update changelog for version ${{ needs.crate_metadata.outputs.version }}" || echo "No changes to commit"
-          git push origin HEAD:${{ github.ref }}
+          git commit -am "chore: update changelog for version ${version}" || echo "No changes to commit"
+          git tag "${version}" --file=/tmp/changes.txt --cleanup=whitespace
+          git push --follow-tags
+          #git push origin HEAD:${{ github.ref }}
   build:
     name: ${{ matrix.job.target }} (${{ matrix.job.os }})
     runs-on: ${{ matrix.job.os }}
@@ -409,16 +474,9 @@ jobs:
           name: ${{ steps.debian-package.outputs.DPKG_NAME }}
           path: ${{ steps.debian-package.outputs.DPKG_PATH }}
 
-      - name: Check for release
-        id: is-release
-        shell: bash
-        run: |
-          unset IS_RELEASE ; if [[ $GITHUB_REF =~ ^refs/tags/v[0-9].* ]]; then IS_RELEASE='true' ; fi
-          echo "IS_RELEASE=${IS_RELEASE}" >> $GITHUB_OUTPUT
-
       - name: Publish archives and packages
         uses: softprops/action-gh-release@v2
-        if: steps.is-release.outputs.IS_RELEASE
+        if: needs.crate_metadata.outputs.is_release
         with:
           files: |
             ${{ steps.package.outputs.PKG_PATH }}
