@@ -394,8 +394,8 @@ jobs:
 
           # README and LICENSE
           install -Dm644 "README.md" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/README.md"
-          install -Dm644 "LICENSE-MIT" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/LICENSE-MIT.md"
-          install -Dm644 "LICENSE-APACHE" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/LICENSE-APACHE.md"
+          install -Dm644 "LICENSE-MIT.md" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/LICENSE-MIT.md"
+          install -Dm644 "LICENSE-APACHE.md" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/LICENSE-APACHE.md"
           install -Dm644 "CHANGELOG.md" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/changelog"
           gzip -n --best "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/changelog"
 
