@@ -1,7 +1,9 @@
 # port-tester
-Port test binary that provides a simple port open check and returns a summary. For use in detecting connectivity issues to a specific service.
+Port tester (pt) provides repetative port tests and returns a summary, similar to ping.
+For use in detecting connectivity issues to a specific service.
 
 ## Help
+```
 Usage: pt [OPTIONS] <HOST> [PORT]
 
 Arguments:
@@ -25,6 +27,7 @@ Options:
           Print help
   -V, --version
           Print version
+```
 
 ## Examples
 By defautl pt makes an infinite number of attempts and must be interrupted. pt will try to print a report on interrupt.

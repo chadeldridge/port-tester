@@ -1,0 +1,486 @@
+name: CICD
+
+env:
+  CARGO_TERM_COLOR: always
+  CICD_INTERMEDIATES_DIR: "_cicd-intermediates"
+  MSRV_FEATURES: --no-default-features --features minimal-application,bugreport,build-assets
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*.*.*"
+
+# Taken from bat workflow to learn how this works. Modify to fit our needs.
+jobs:
+  all-jobs:
+    if: always()
+    name: all-jobs
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+      - test
+      - audit
+      - changelog
+      - build
+    steps:
+      - run: |
+          jq -C <<< '${{ toJson(needs) }}'
+          jq --exit-status 'all(.result == "success")' <<< '${{ toJson(needs) }}'
+  metadata:
+    name: Extract crate metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Extract crate information
+        id: metadata
+        run: |
+          cargo metadata --no-deps --format-version 1 | jq -r '"name=" + .packages[0].name' | tee -a $GITHUB_OUTPUT
+          cargo metadata --no-deps --format-version 1 | jq -r '"version=" + .packages[0].version' | tee -a $GITHUB_OUTPUT
+          cargo metadata --no-deps --format-version 1 | jq -r '"maintainer=" + .packages[0].authors[0]' | tee -a $GITHUB_OUTPUT
+          cargo metadata --no-deps --format-version 1 | jq -r '"homepage=" + .packages[0].homepage' | tee -a $GITHUB_OUTPUT
+          cargo metadata --no-deps --format-version 1 | jq -r '"msrv=" + .packages[0].rust_version' | tee -a $GITHUB_OUTPUT
+          cargo metadata --no-deps --format-version 1 \
+          | jq -r '.packages[].targets[] | select(.kind[] == "bin") | "bin=\(.name)"' \
+          | tee -a $GITHUB_OUTPUT
+      - name: Check for release
+        id: is-release
+        shell: bash
+        run: |
+          IS_RELEASE='false'; if [[ $GITHUB_REF =~ ^refs/tags/v[0-9].* ]]; then IS_RELEASE='true'; fi
+          echo "is_release=${IS_RELEASE}" | tee -a $GITHUB_OUTPUT
+    outputs:
+      name: ${{ steps.metadata.outputs.name }}
+      version: ${{ steps.metadata.outputs.version }}
+      maintainer: ${{ steps.metadata.outputs.maintainer }}
+      homepage: ${{ steps.metadata.outputs.homepage }}
+      msrv: ${{ steps.metadata.outputs.msrv }}
+      is_release: ${{ steps.is-release.outputs.is_release }}
+      bin: ${{ steps.metadata.outputs.bin }}
+  # Linting heavily taken from Cargo
+  lint:
+    needs:
+      - rustfmt
+      - clippy
+      #- stale-label
+      - lockfile
+    name: Lint for code quality and style
+    runs-on: ubuntu-latest
+    steps:
+      - name: Linting results
+        run: |
+          jq -C <<< '${{ toJson(needs) }}'
+          jq --exit-status 'all(.result == "success")' <<< '${{ toJson(needs) }}'
+  rustfmt:
+    name: Lint for code quality and style
+    runs-on: ubuntu-latest
+    steps:
+      #- name: Install Rust Toolchain
+      #  uses: dtolnay/rust-toolchain@stable
+      #  with:
+      #    components: rustfmt,clippy
+      - name: Git Checkout
+        uses: actions/checkout@v6
+      - run: rustup update stable && rustup default stable
+      - run: rustup component add rustfmt
+      - name: Run formatter
+        run: cargo fmt --all --check
+      #- name: Run Clippy
+      #  run: cargo clippy --locked --all-targets --all-features -- -D warnings
+  clippy:
+    strategy:
+      matrix:
+        include:
+          - name: Linux x86_64
+            os: ubuntu-latest
+          - name: macOS aarch64
+            os: macos-14
+          - name: Windows x86_64 MSVC
+            os: windows-latest
+    name: Clippy ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - run: rustup update stable && rustup default stable
+      - run: rustup component add clippy
+      - run: cargo clippy --workspace --all-targets --no-deps -- -D warning
+  #stale-label:
+  #  runs-on: ubuntu-latest
+  #  steps:
+  #    - uses: actions/checkout@v6
+  #    - run: rustup update stable && rustup default stable
+  #    - run: cargo stale-label
+  #lint-docs:
+  #  runs-on: ubuntu-latest
+  #  steps:
+  #    - uses: actions/checkout@v5
+  #    - run: rustup update stable && rustup default stable
+  #    - run: cargo lint-docs --check
+  # Ensure Cargo.lock is up-to-date
+  lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: rustup update stable && rustup default stable
+      - run: cargo update -p port-tester --locked
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Git Checkout
+        uses: actions/checkout@v6
+      - name: Run Unit Tests
+        run: cargo test --locked --release
+  audit:
+    name: Cargo Audit
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        checks:
+          - advisories
+          - bans sources
+          #- bans licenses sources
+    steps:
+      - uses: actions/checkout@v6
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        # Prevent sudden announcement of a new advisory from failing ci:
+        continue-on-error: ${{ matrix.checks == 'advisories' }}
+        with:
+          command: check ${{ matrix.checks }}
+          rust-version: stable
+  #    steps:
+  #      - name: Install Cargo Audit
+  #        run: cargo install cargo-audit --locked
+  #      - name: Git Checkout
+  #        uses: actions/checkout@v6
+  #      - name: Run Cargo Audit
+  #        run: cargo audit
+
+  changelog:
+    name: Build and commit changelog
+    runs-on: ubuntu-latest
+    needs:
+      - metadata
+    env:
+      version: ${{ needs.metadata.outputs.version }}
+    steps:
+      - name: Git Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install towncrier
+        run: pip install towncrier
+      - name: Store notes
+        run: |
+          towncrier build --draft --version ${version} | tail -n +3 > /tmp/changes.txt
+      - name: Build changelog
+        run: |
+          towncrier build --yes --version ${version}
+      - name: Commit changelog
+        if: ${{ needs.metadata.outputs.is_release == true }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore: update changelog for version ${version}" || echo "No changes to commit"
+          git tag "${version}" --file=/tmp/changes.txt --cleanup=whitespace
+          git push origin HEAD:${{ github.ref }}
+
+  #          git push --follow-tags
+  build:
+    name: ${{ matrix.job.target }} (${{ matrix.job.os }})
+    runs-on: ${{ matrix.job.os }}
+    # Do not run build unless all other checks have completed.
+    needs:
+      - metadata
+      - lint
+      - test
+      - audit
+      - changelog
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+          - {
+              target: x86_64-unknown-linux-gnu,
+              os: ubuntu-latest,
+              dpkg_arch: amd64,
+              use-cross: true,
+            }
+          - {
+              target: i686-unknown-linux-gnu,
+              os: ubuntu-latest,
+              dpkg_arch: i686,
+              use-cross: true,
+            }
+          - { target: i686-pc-windows-msvc, os: windows-latest }
+          - {
+              target: aarch64-unknown-linux-gnu,
+              os: ubuntu-latest,
+              dpkg_arch: arm64,
+              use-cross: true,
+            }
+          - {
+              target: aarch64-unknown-linux-musl,
+              os: ubuntu-latest,
+              dpkg_arch: arm64,
+              use-cross: true,
+            }
+          - {
+              target: i686-unknown-linux-musl,
+              os: ubuntu-latest,
+              dpkg_arch: musl-linux-i686,
+              use-cross: true,
+            }
+          - { target: x86_64-apple-darwin, os: macos-latest }
+          - { target: aarch64-apple-darwin, os: macos-latest }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest }
+          - {
+              target: x86_64-unknown-linux-musl,
+              os: ubuntu-latest,
+              dpkg_arch: musl-linux-amd64,
+              use-cross: true,
+            }
+    env:
+      BUILD_CMD: cargo
+    steps:
+      - name: Git Checkout
+        uses: actions/checkout@v6
+      - name: Install prerequisites
+        shell: bash
+        run: |
+          case ${{ matrix.job.target }} in
+            arm-unknown-linux-*) sudo apt-get -y update ; sudo apt-get -y install gcc-arm-linux-gnueabihf ;;
+            aarch64-unknown-linux-gnu) sudo apt-get -y update ; sudo apt-get -y install gcc-aarch64-linux-gnu ;;
+          esac
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.job.target }}
+      - name: Install cross
+        if: matrix.job.use-cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+      - name: Overwrite build command env variable
+        if: matrix.job.use-cross
+        shell: bash
+        run: echo "BUILD_CMD=cross" >> $GITHUB_ENV
+      - name: Show version information (Rust, cargo, GCC)
+        shell: bash
+        run: |
+          gcc --version || true
+          rustup -V
+          rustup toolchain list
+          rustup default
+          cargo -V
+          rustc -V
+      - name: Build
+        shell: bash
+        run: $BUILD_CMD build --locked --release --target=${{ matrix.job.target }}
+      - name: Set binary name & path
+        id: bin
+        shell: bash
+        run: |
+          # Figure out suffix of binary
+          EXE_suffix=""
+          case ${{ matrix.job.target }} in
+            *-pc-windows-*) EXE_suffix=".exe" ;;
+          esac;
+
+          # Setup paths
+          BIN_NAME="${{ needs.metadata.outputs.bin }}${EXE_suffix}"
+          BIN_PATH="target/${{ matrix.job.target }}/release/${BIN_NAME}"
+
+          # Let subsequent steps know where to find the binary
+          echo "BIN_PATH=${BIN_PATH}" >> $GITHUB_OUTPUT
+          echo "BIN_NAME=${BIN_NAME}" >> $GITHUB_OUTPUT
+      - name: Set testing options
+        id: test-options
+        shell: bash
+        run: |
+          # test only library unit tests and binary for arm-type targets
+          unset CARGO_TEST_OPTIONS
+          unset CARGO_TEST_OPTIONS ; case ${{ matrix.job.target }} in arm-* | aarch64-*) CARGO_TEST_OPTIONS="--lib --bin ${{ needs.metadata.outputs.name }}" ;; esac;
+          echo "CARGO_TEST_OPTIONS=${CARGO_TEST_OPTIONS}" >> $GITHUB_OUTPUT
+      # We need to add testing before enabling this section
+      #- name: Run tests
+      #  shell: bash
+      #  run: |
+      #    if [[ ${{ matrix.job.os }} = windows-* ]]
+      #    then
+      #      powershell.exe -command "$BUILD_CMD test --locked --target=${{ matrix.job.target }} ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}}"
+      #    else
+      #      $BUILD_CMD test --locked --target=${{ matrix.job.target }} ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}}
+      #    fi
+
+      # Run binary test against 8.8.8.8. Return code indicates success.
+      - name: Run pt
+        shell: bash
+        run: $BUILD_CMD run --locked --target=${{ matrix.job.target }} -- 8.8.8.8 -c 1 -s
+      # Run binary test against 8.8.8.8 port 53. Return code indicates success.
+      - name: Run pt port 53
+        shell: bash
+        run: $BUILD_CMD run --locked --target=${{ matrix.job.target }} -- 8.8.8.8 53 -c 1 -s
+      # Creates a tarball or zip file containing the built binary and other assets for each build type.
+
+      - name: Create tarball
+        id: package
+        shell: bash
+        run: |
+          PKG_suffix=".tar.gz" ; case ${{ matrix.job.target }} in *-pc-windows-*) PKG_suffix=".zip" ;; esac;
+          PKG_BASENAME=${{ needs.metadata.outputs.bin}}-v${{ needs.metadata.outputs.version }}-${{ matrix.job.target }}
+          PKG_NAME=${PKG_BASENAME}${PKG_suffix}
+          echo "PKG_NAME=${PKG_NAME}" >> $GITHUB_OUTPUT
+
+          PKG_STAGING="${{ env.CICD_INTERMEDIATES_DIR }}/package"
+          ARCHIVE_DIR="${PKG_STAGING}/${PKG_BASENAME}/"
+          mkdir -p "${ARCHIVE_DIR}"
+          mkdir -p "${ARCHIVE_DIR}/autocomplete"
+
+          # Binary
+          cp "${{ steps.bin.outputs.BIN_PATH }}" "$ARCHIVE_DIR"
+
+          # README, LICENSE and CHANGELOG files
+          cp "README.md" "LICENSE-MIT.md" "LICENSE-APACHE.md" "CHANGELOG.md" "$ARCHIVE_DIR"
+
+          # base compressed package
+          pushd "${PKG_STAGING}/" >/dev/null
+          case ${{ matrix.job.target }} in
+            *-pc-windows-*) 7z -y a "${PKG_NAME}" "${PKG_BASENAME}"/* | tail -2 ;;
+            *) tar czf "${PKG_NAME}" "${PKG_BASENAME}"/* ;;
+          esac;
+          popd >/dev/null
+
+          # Let subsequent steps know where to find the compressed package
+          echo "PKG_PATH=${PKG_STAGING}/${PKG_NAME}" >> $GITHUB_OUTPUT
+
+      # Creates a Debian package for Ubuntu builds.
+      - name: Create Debian package
+        id: debian-package
+        shell: bash
+        if: startsWith(matrix.job.os, 'ubuntu')
+        run: |
+          COPYRIGHT_YEARS="2026 - "$(date "+%Y")
+          DPKG_STAGING="${{ env.CICD_INTERMEDIATES_DIR }}/debian-package"
+          DPKG_DIR="${DPKG_STAGING}/dpkg"
+          mkdir -p "${DPKG_DIR}"
+
+          DPKG_BASENAME=${{ needs.metadata.outputs.bin }}
+          DPKG_CONFLICTS=${{ needs.metadata.outputs.bin }}-musl
+          case ${{ matrix.job.target }} in *-musl) DPKG_BASENAME=${{ needs.metadata.outputs.bin }}-musl ; DPKG_CONFLICTS=${{ needs.metadata.outputs.bin }} ;; esac;
+          DPKG_VERSION=${{ needs.metadata.outputs.version }}
+          DPKG_ARCH="${{ matrix.job.dpkg_arch }}"
+          DPKG_NAME="${DPKG_BASENAME}_${DPKG_VERSION}_${DPKG_ARCH}.deb"
+          echo "DPKG_NAME=${DPKG_NAME}" >> $GITHUB_OUTPUT
+
+          # Binary
+          install -Dm755 "${{ steps.bin.outputs.BIN_PATH }}" "${DPKG_DIR}/usr/bin/${{ steps.bin.outputs.BIN_NAME }}"
+
+          # Man page
+          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.bin }}'-*/out/assets/manual/pt.1 "${DPKG_DIR}/usr/share/man/man1/${{ needs.metadata.outputs.bin }}.1"
+          #gzip -n --best "${DPKG_DIR}/usr/share/man/man1/${{ needs.metadata.outputs.name }}.1"
+
+          # Autocompletion files
+          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.bin }}'-*/out/assets/completions/pt.bash "${DPKG_DIR}/usr/share/bash-completion/completions/${{ needs.metadata.outputs.bin }}"
+          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.bin }}'-*/out/assets/completions/pt.fish "${DPKG_DIR}/usr/share/fish/vendor_completions.d/${{ needs.metadata.outputs.bin }}.fish"
+          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.bin }}'-*/out/assets/completions/pt.zsh "${DPKG_DIR}/usr/share/zsh/vendor-completions/_${{ needs.metadata.outputs.bin }}"
+
+          # README and LICENSE
+          install -Dm644 "README.md" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/README.md"
+          install -Dm644 "LICENSE-MIT.md" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/LICENSE-MIT.md"
+          install -Dm644 "LICENSE-APACHE.md" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/LICENSE-APACHE.md"
+          install -Dm644 "CHANGELOG.md" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/changelog"
+          gzip -n --best "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/changelog"
+
+          cat > "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/copyright" <<EOF
+          Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+          Upstream-Name: ${{ needs.metadata.outputs.bin }}
+          Source: ${{ needs.metadata.outputs.homepage }}
+
+          Files: *
+          Copyright: ${{ needs.metadata.outputs.maintainer }}
+          Copyright: $COPYRIGHT_YEARS ${{ needs.metadata.outputs.maintainer }}
+          License: Apache-2.0 or MIT
+
+          License: Apache-2.0
+            On Debian systems, the complete text of the Apache-2.0 can be found in the
+            file /usr/share/common-licenses/Apache-2.0.
+
+          License: MIT
+            Permission is hereby granted, free of charge, to any
+            person obtaining a copy of this software and associated
+            documentation files (the "Software"), to deal in the
+            Software without restriction, including without
+            limitation the rights to use, copy, modify, merge,
+            publish, distribute, sublicense, and/or sell copies of
+            the Software, and to permit persons to whom the Software
+            is furnished to do so, subject to the following
+            conditions:
+            .
+            The above copyright notice and this permission notice
+            shall be included in all copies or substantial portions
+            of the Software.
+            .
+            THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+            ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+            TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+            PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+            SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+            CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+            OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+            IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+            DEALINGS IN THE SOFTWARE.
+          EOF
+          chmod 644 "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/copyright"
+
+          # control file
+          mkdir -p "${DPKG_DIR}/DEBIAN"
+          cat > "${DPKG_DIR}/DEBIAN/control" <<EOF
+          Package: ${DPKG_BASENAME}
+          Version: ${DPKG_VERSION}
+          Section: net
+          Priority: optional
+          Maintainer: ${{ needs.metadata.outputs.maintainer }}
+          Homepage: ${{ needs.metadata.outputs.homepage }}
+          Architecture: ${DPKG_ARCH}
+          Provides: ${{ needs.metadata.outputs.bin }}
+          Conflicts: ${DPKG_CONFLICTS}
+          Description: Port tester (pt) provides simple port testing with the feel of ping.
+            Used to detect connectivity issues to a specific service.
+          EOF
+
+          DPKG_PATH="${DPKG_STAGING}/${DPKG_NAME}"
+          echo "DPKG_PATH=${DPKG_PATH}" >> $GITHUB_OUTPUT
+
+          # build dpkg
+          fakeroot dpkg-deb --build "${DPKG_DIR}" "${DPKG_PATH}"
+
+      - name: "Artifact upload: tarball"
+        uses: actions/upload-artifact@master
+        with:
+          name: ${{ steps.package.outputs.PKG_NAME }}
+          path: ${{ steps.package.outputs.PKG_PATH }}
+
+      - name: "Artifact upload: Debian package"
+        uses: actions/upload-artifact@master
+        if: steps.debian-package.outputs.DPKG_NAME
+        with:
+          name: ${{ steps.debian-package.outputs.DPKG_NAME }}
+          path: ${{ steps.debian-package.outputs.DPKG_PATH }}
+
+      - name: Publish archives and packages
+        uses: softprops/action-gh-release@v2
+        if: ${{ needs.metadata.outputs.is_release == true }}
+        with:
+          files: |
+            ${{ steps.package.outputs.PKG_PATH }}
+            ${{ steps.debian-package.outputs.DPKG_PATH }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
