@@ -157,6 +157,7 @@ jobs:
   #        uses: actions/checkout@v6
   #      - name: Run Cargo Audit
   #        run: cargo audit
+
   changelog:
     name: Build and commit changelog
     runs-on: ubuntu-latest
@@ -184,8 +185,9 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git commit -am "chore: update changelog for version ${version}" || echo "No changes to commit"
           git tag "${version}" --file=/tmp/changes.txt --cleanup=whitespace
-          git push --follow-tags
-          #git push origin HEAD:${{ github.ref }}
+          git push origin HEAD:${{ github.ref }}
+
+  #          git push --follow-tags
   build:
     name: ${{ matrix.job.target }} (${{ matrix.job.os }})
     runs-on: ${{ matrix.job.os }}
