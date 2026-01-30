@@ -20,7 +20,6 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           BASE_BRANCH: ${{ github.base_ref }}
-          #BASE_BRANCH: "main"
         run: |
           # Skip when 'no-changelog' label is present
           if [[ "${{ contains(github.event.pull_request.labels.*.name, 'no-changelog') }}" == "true" ]]; then
@@ -35,24 +34,3 @@ jobs:
           source towncrier_check/bin/activate
           towncrier check --compare-with origin/${BASE_BRANCH}
           towncrier build --version "${VERSION}" --draft
-
-#      - name: Check for changelog fragment
-#        uses: actions/setup-python@v5
-#        with:
-#          python-version: "3.x"
-#      - name: Install towncrier
-#        run: pip install towncrier
-#      - name: Check for news fragment unless 'no-changelog' label is present
-#        run: |
-#          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'no-changelog') }}" == "true" ]]; then
-#            echo "Skipping changelog check"
-#            exit 0
-#          fi
-#          towncrier check
-#          if git diff --name-only origin/${{ github.base_ref }}...HEAD \
-#            | grep -q '^changelog.d/.*\.md$'; then
-#            echo "Changelog fragment found."
-#          else
-#            echo "::error::Missing changelog fragment in changelog.d/"
-#            exit 1
-#          fi
