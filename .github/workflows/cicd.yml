@@ -58,8 +58,8 @@ jobs:
       maintainer: ${{ steps.metadata.outputs.maintainer }}
       homepage: ${{ steps.metadata.outputs.homepage }}
       msrv: ${{ steps.metadata.outputs.msrv }}
-      is_release: ${{ steps.is-release.outputs.is_release }}
       bin: ${{ steps.metadata.outputs.bin }}
+      is_release: ${{ steps.is-release.outputs.is_release }}
   # Linting heavily taken from Cargo
   lint:
     needs:
@@ -184,7 +184,7 @@ jobs:
         run: |
           towncrier build --yes --version ${version}
       - name: Commit changelog
-        if: ${{ needs.metadata.outputs.is_release == true }}
+        if: needs.metadata.outputs.is_release == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -477,7 +477,7 @@ jobs:
 
       - name: Publish archives and packages
         uses: softprops/action-gh-release@v2
-        if: ${{ needs.metadata.outputs.is_release == true }}
+        if: needs.metadata.outputs.is_release == 'true'
         with:
           files: |
             ${{ steps.package.outputs.PKG_PATH }}
