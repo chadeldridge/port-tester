@@ -43,6 +43,9 @@ jobs:
           cargo metadata --no-deps --format-version 1 | jq -r '"maintainer=" + .packages[0].authors[0]' | tee -a $GITHUB_OUTPUT
           cargo metadata --no-deps --format-version 1 | jq -r '"homepage=" + .packages[0].homepage' | tee -a $GITHUB_OUTPUT
           cargo metadata --no-deps --format-version 1 | jq -r '"msrv=" + .packages[0].rust_version' | tee -a $GITHUB_OUTPUT
+          cargo metadata --no-deps --format-version 1 \
+          | jq -r '"bin=" + .packages[].targets[] | select(.kind[] == "bin") | "bin=\(.name)"' \
+          | tee -a $GITHUB_OUTPUT
       - name: Check for release
         id: is-release
         shell: bash
@@ -56,6 +59,7 @@ jobs:
       homepage: ${{ steps.metadata.outputs.homepage }}
       msrv: ${{ steps.metadata.outputs.msrv }}
       is_release: ${{ steps.is-release.outputs.is_release }}
+      bin: ${{ steps.metadata.outputs.bin }}
   # Linting heavily taken from Cargo
   lint:
     needs:
@@ -291,7 +295,7 @@ jobs:
           esac;
 
           # Setup paths
-          BIN_NAME="${{ needs.metadata.outputs.name }}${EXE_suffix}"
+          BIN_NAME="${{ needs.metadata.outputs.bin }}${EXE_suffix}"
           BIN_PATH="target/${{ matrix.job.target }}/release/${BIN_NAME}"
 
           # Let subsequent steps know where to find the binary
@@ -315,6 +319,7 @@ jobs:
       #    else
       #      $BUILD_CMD test --locked --target=${{ matrix.job.target }} ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}}
       #    fi
+
       # Run binary test against 8.8.8.8. Return code indicates success.
       - name: Run pt
         shell: bash
@@ -324,12 +329,13 @@ jobs:
         shell: bash
         run: $BUILD_CMD run --locked --target=${{ matrix.job.target }} -- 8.8.8.8 53 -c 1 -s
       # Creates a tarball or zip file containing the built binary and other assets for each build type.
+
       - name: Create tarball
         id: package
         shell: bash
         run: |
           PKG_suffix=".tar.gz" ; case ${{ matrix.job.target }} in *-pc-windows-*) PKG_suffix=".zip" ;; esac;
-          PKG_BASENAME=${{ needs.metadata.outputs.name }}-v${{ needs.metadata.outputs.version }}-${{ matrix.job.target }}
+          PKG_BASENAME=${{ needs.metadata.outputs.bin}}-v${{ needs.metadata.outputs.version }}-${{ matrix.job.target }}
           PKG_NAME=${PKG_BASENAME}${PKG_suffix}
           echo "PKG_NAME=${PKG_NAME}" >> $GITHUB_OUTPUT
 
@@ -344,15 +350,6 @@ jobs:
           # README, LICENSE and CHANGELOG files
           cp "README.md" "LICENSE-MIT.md" "LICENSE-APACHE.md" "CHANGELOG.md" "$ARCHIVE_DIR"
 
-          # Man page
-          #cp 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.name }}'-*/out/assets/manual/pt.1 "$ARCHIVE_DIR"
-
-          # Autocompletion files
-          #cp 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.name }}'-*/out/assets/completions/pt.bash "$ARCHIVE_DIR/autocomplete/${{ needs.metadata.outputs.name }}.bash"
-          #cp 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.name }}'-*/out/assets/completions/pt.fish "$ARCHIVE_DIR/autocomplete/${{ needs.metadata.outputs.name }}.fish"
-          #cp 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.name }}'-*/out/assets/completions/_pt.ps1 "$ARCHIVE_DIR/autocomplete/_${{ needs.metadata.outputs.name }}.ps1"
-          #cp 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.name }}'-*/out/assets/completions/pt.zsh "$ARCHIVE_DIR/autocomplete/${{ needs.metadata.outputs.name }}.zsh"
-
           # base compressed package
           pushd "${PKG_STAGING}/" >/dev/null
           case ${{ matrix.job.target }} in
@@ -363,6 +360,7 @@ jobs:
 
           # Let subsequent steps know where to find the compressed package
           echo "PKG_PATH=${PKG_STAGING}/${PKG_NAME}" >> $GITHUB_OUTPUT
+
       # Creates a Debian package for Ubuntu builds.
       - name: Create Debian package
         id: debian-package
@@ -374,9 +372,9 @@ jobs:
           DPKG_DIR="${DPKG_STAGING}/dpkg"
           mkdir -p "${DPKG_DIR}"
 
-          DPKG_BASENAME=${{ needs.metadata.outputs.name }}
-          DPKG_CONFLICTS=${{ needs.metadata.outputs.name }}-musl
-          case ${{ matrix.job.target }} in *-musl) DPKG_BASENAME=${{ needs.metadata.outputs.name }}-musl ; DPKG_CONFLICTS=${{ needs.metadata.outputs.name }} ;; esac;
+          DPKG_BASENAME=${{ needs.metadata.outputs.bin }}
+          DPKG_CONFLICTS=${{ needs.metadata.outputs.bin }}-musl
+          case ${{ matrix.job.target }} in *-musl) DPKG_BASENAME=${{ needs.metadata.outputs.bin }}-musl ; DPKG_CONFLICTS=${{ needs.metadata.outputs.bin }} ;; esac;
           DPKG_VERSION=${{ needs.metadata.outputs.version }}
           DPKG_ARCH="${{ matrix.job.dpkg_arch }}"
           DPKG_NAME="${DPKG_BASENAME}_${DPKG_VERSION}_${DPKG_ARCH}.deb"
@@ -386,13 +384,13 @@ jobs:
           install -Dm755 "${{ steps.bin.outputs.BIN_PATH }}" "${DPKG_DIR}/usr/bin/${{ steps.bin.outputs.BIN_NAME }}"
 
           # Man page
-          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.name }}'-*/out/assets/manual/pt.1 "${DPKG_DIR}/usr/share/man/man1/${{ needs.metadata.outputs.name }}.1"
+          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.bin }}'-*/out/assets/manual/pt.1 "${DPKG_DIR}/usr/share/man/man1/${{ needs.metadata.outputs.bin }}.1"
           #gzip -n --best "${DPKG_DIR}/usr/share/man/man1/${{ needs.metadata.outputs.name }}.1"
 
           # Autocompletion files
-          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.name }}'-*/out/assets/completions/pt.bash "${DPKG_DIR}/usr/share/bash-completion/completions/${{ needs.metadata.outputs.name }}"
-          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.name }}'-*/out/assets/completions/pt.fish "${DPKG_DIR}/usr/share/fish/vendor_completions.d/${{ needs.metadata.outputs.name }}.fish"
-          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.name }}'-*/out/assets/completions/pt.zsh "${DPKG_DIR}/usr/share/zsh/vendor-completions/_${{ needs.metadata.outputs.name }}"
+          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.bin }}'-*/out/assets/completions/pt.bash "${DPKG_DIR}/usr/share/bash-completion/completions/${{ needs.metadata.outputs.bin }}"
+          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.bin }}'-*/out/assets/completions/pt.fish "${DPKG_DIR}/usr/share/fish/vendor_completions.d/${{ needs.metadata.outputs.bin }}.fish"
+          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.bin }}'-*/out/assets/completions/pt.zsh "${DPKG_DIR}/usr/share/zsh/vendor-completions/_${{ needs.metadata.outputs.bin }}"
 
           # README and LICENSE
           install -Dm644 "README.md" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/README.md"
@@ -403,7 +401,7 @@ jobs:
 
           cat > "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/copyright" <<EOF
           Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-          Upstream-Name: ${{ needs.metadata.outputs.name }}
+          Upstream-Name: ${{ needs.metadata.outputs.bin }}
           Source: ${{ needs.metadata.outputs.homepage }}
 
           Files: *
@@ -452,7 +450,7 @@ jobs:
           Maintainer: ${{ needs.metadata.outputs.maintainer }}
           Homepage: ${{ needs.metadata.outputs.homepage }}
           Architecture: ${DPKG_ARCH}
-          Provides: ${{ needs.metadata.outputs.name }}
+          Provides: ${{ needs.metadata.outputs.bin }}
           Conflicts: ${DPKG_CONFLICTS}
           Description: Port tester (pt) provides simple port testing with the feel of ping.
             Used to detect connectivity issues to a specific service.
