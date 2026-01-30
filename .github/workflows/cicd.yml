@@ -44,7 +44,7 @@ jobs:
           cargo metadata --no-deps --format-version 1 | jq -r '"homepage=" + .packages[0].homepage' | tee -a $GITHUB_OUTPUT
           cargo metadata --no-deps --format-version 1 | jq -r '"msrv=" + .packages[0].rust_version' | tee -a $GITHUB_OUTPUT
           cargo metadata --no-deps --format-version 1 \
-          | jq -r '"bin=" + .packages[].targets[] | select(.kind[] == "bin") | "bin=\(.name)"' \
+          | jq -r '.packages[].targets[] | select(.kind[] == "bin") | "bin=\(.name)"' \
           | tee -a $GITHUB_OUTPUT
       - name: Check for release
         id: is-release
