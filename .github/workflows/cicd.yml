@@ -183,6 +183,7 @@ jobs:
       - name: Build changelog
         run: |
           towncrier build --yes --version ${version}
+          echo "is_release=${{ needs.metadata.outputs.is_release }}"
       - name: Commit changelog
         if: needs.metadata.outputs.is_release == 'true'
         run: |
