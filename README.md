@@ -1,5 +1,5 @@
 # port-tester
-Port tester (pt) provides repetative port tests and returns a summary, similar to ping.
+Port tester (pt) provides repetitive port tests and returns a summary, similar to ping.
 For use in detecting connectivity issues to a specific service.
 
 ## Help
@@ -30,7 +30,7 @@ Options:
 ```
 
 ## Examples
-By defautl pt makes an infinite number of attempts and must be interrupted. pt will try to print a report on interrupt.
+By default, pt makes an infinite number of attempts and must be interrupted. pt will try to print a report on interrupt.
 
 Connect to 8.8.8.8 on port 53 every 5 secs. Make 10 attempts.
 ```

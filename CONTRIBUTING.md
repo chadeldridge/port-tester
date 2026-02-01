@@ -9,7 +9,7 @@ This project uses the following branch types:
   - `test` for experimenting outside of an issue/ticket.
   - `doc` for adding, changing or removing documentation.
 
-Branche names should start with the branch type and include related issues in the path.
+Branch names should start with the branch type and include related issues in the path.
   - `feature/issue-142/add-http-support`
   - `test/refactor-core-io-read-file`
 
