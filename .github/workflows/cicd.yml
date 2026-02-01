@@ -65,8 +65,8 @@ jobs:
     needs:
       - rustfmt
       - clippy
-      #- stale-label
       - lockfile
+      #- stale-label
     name: Lint for code quality and style
     runs-on: ubuntu-latest
     steps:
@@ -78,18 +78,14 @@ jobs:
     name: Lint for code quality and style
     runs-on: ubuntu-latest
     steps:
-      #- name: Install Rust Toolchain
-      #  uses: dtolnay/rust-toolchain@stable
-      #  with:
-      #    components: rustfmt,clippy
       - name: Git Checkout
         uses: actions/checkout@v6
-      - run: rustup update stable && rustup default stable
-      - run: rustup component add rustfmt
+      - name: Update Rust
+        run: rustup update stable && rustup default stable
+      - name: Add rustfmt
+        run: rustup component add rustfmt
       - name: Run formatter
         run: cargo fmt --all --check
-      #- name: Run Clippy
-      #  run: cargo clippy --locked --all-targets --all-features -- -D warnings
   clippy:
     strategy:
       matrix:
@@ -103,10 +99,23 @@ jobs:
     name: Clippy ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
-      - run: rustup update stable && rustup default stable
-      - run: rustup component add clippy
+      - name: Git Checkout
+        uses: actions/checkout@v6
+      - name: Update Rust
+        run: rustup update stable && rustup default stable
+      - name: Add rustfmt
+        run: rustup component add clippy
       - run: cargo clippy --workspace --all-targets --no-deps -- -D warning
+  lockfile:
+    name: Check Cargo Lock
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git Checkout
+        uses: actions/checkout@v6
+      - name: Update Rust
+        run: rustup update stable && rustup default stable
+      - name: Check Cargo.lock
+        run: cargo update -p port-tester --locked
   #stale-label:
   #  runs-on: ubuntu-latest
   #  steps:
@@ -120,12 +129,6 @@ jobs:
   #    - run: rustup update stable && rustup default stable
   #    - run: cargo lint-docs --check
   # Ensure Cargo.lock is up-to-date
-  lockfile:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - run: rustup update stable && rustup default stable
-      - run: cargo update -p port-tester --locked
 
   test:
     name: Run Tests
@@ -144,8 +147,7 @@ jobs:
       matrix:
         checks:
           - advisories
-          - bans sources
-          #- bans licenses sources
+          - bans licenses sources
     steps:
       - uses: actions/checkout@v6
       - uses: EmbarkStudios/cargo-deny-action@v2
@@ -154,13 +156,6 @@ jobs:
         with:
           command: check ${{ matrix.checks }}
           rust-version: stable
-  #    steps:
-  #      - name: Install Cargo Audit
-  #        run: cargo install cargo-audit --locked
-  #      - name: Git Checkout
-  #        uses: actions/checkout@v6
-  #      - name: Run Cargo Audit
-  #        run: cargo audit
 
   changelog:
     name: Build and commit changelog
