@@ -9,37 +9,34 @@ This project uses the following branch types:
   - `test` for experimenting outside of an issue/ticket.
   - `doc` for adding, changing or removing documentation.
 
-Branche names should be start with the branch type and include related issues in the path.
+Branche names should start with the branch type and include related issues in the path.
   - `feature/issue-142/add-http-support`
   - `test/refactor-core-io-read-file`
 
 ## Changelog
 
-Add a changelog entry in `changelog.d/` named `<identifier>.<category>.md`
-  - With Issue: `issue-<number>.<category>.md`
-  - Without Issue: `<branch-description>.<category>.md`
+Add a changelog entry to CHANGELOG.md under the appropriate category.
 
-Where \<category\> is one of:
-  - `security`
-  - `removed`
-  - `deprecated`
-  - `added`
-  - `changed`
-  - `fixed`
+Categories are based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Documentation and typo updates can skip changelog checks by adding the label `no-changelog` in the Pull Request.
+Categories:
+  - Security
+  - Removed
+  - Deprecated
+  - Added
+  - Changed
+  - Fixed
 
-Try to keep each changelog entry to a single line. If multiple changelog lines of the same type are needed, use the format:
+Try to keep each changelog entry to a single line. Pull request actions check for changelog updates.
 
-`<branch-description>-<number>.<type>.md`
+Changelog entries should placed under the correct category in `unreleased` and follow the format of:
 
-The GitHub workflow will automatically added the PR # and contributor's username upon release.
+`  - <short description> #<pr_num> (@<github_username>)`
 
-### Examples:
+Examples:
 
-  - Branch: `feature/issue-142/add-http-support`
-    - File: `issue-142.added.md`
-    - Content: `Added http protocol support for port tests`
-  - Branch: `test/refactor-core-io-read-file`
-    - File: `test-refactor-core-io-read-file.changed.md`
-    - Content: `Refactored core::io::ReadFile to use idomatic methods`
+Under Added
+  - Added http protocol support for port tests. #123 (@chadeldridge)
+
+Under Changed
+  - Refactored core::io::ReadFile to use idomatic methods. #547 (@chadeldridge)

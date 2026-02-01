@@ -1,36 +1,27 @@
-name: Changlelog fragment check
+# Barrowed from bat
+name: Changlelog
 on:
   workflow_dispatch:
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
 jobs:
-  check-news-fragments:
+  check-changelog:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: Install towncrier
-        run: |
-          python -m venv towncrier_check
-          source towncrier_check/bin/activate
-          python -m pip install towncrier
-      - name: Verify Towncrier entry added
-        if: github.event_name == 'pull_request'
+      - name: Fetch Base
+        run: git fetch --no-tags --prune --depth=1 origin
+      - name: Get PR Submitter
+        id: get-submitter
+        run: curl -sSfL https://api.github.com/repos/sharkdp/bat/pulls/${PR_NUMBER} | jq -r '"submitter=" + .user.login' | tee -a $GITHUB_OUTPUT
+      - name: Check Changelog
         env:
-          BASE_BRANCH: ${{ github.base_ref }}
+          PR_SUBMITTER: ${{ steps.get-submitter.outputs.submitter }}
         run: |
-          # Skip when 'no-changelog' label is present
-          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'no-changelog') }}" == "true" ]]; then
-            echo "Skipping changelog check"
-            exit 0
-          fi
-          VERSION="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
-          # Fetch the pull request' base branch so towncrier will be able to
-          # compare the current branch with the base branch.
-          # Source: https://github.com/actions/checkout/#fetch-all-branches.
-          git fetch --no-tags origin +refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}
-          source towncrier_check/bin/activate
-          towncrier check --compare-with origin/${BASE_BRANCH}
-          towncrier build --version "${VERSION}" --draft
+          ADDED=$(git diff -U0 "origin/${PR_BASE}" HEAD -- CHANGELOG.md | grep -P '^\+[^\+].+$')
+          echo "Added lines in CHANGELOG.md:"
+          echo "$ADDED"
+          echo "Grepping for PR info (see CONTRIBUTING.md):"
+          grep "#${PR_NUMBER}\\b.*${PR_SUBMITTER}\\b" <<< "$ADDED"
+          # TODO: Implement converting PR #s to links automatically. Should this be done here or on release?
+          #sed -Ei 's|#([0-9]+)[[:space:]]+\(@(.+)\)|[#\1](https://github.com/chadeldridge/project-name/pull/\1) \(@\2\)|g' CHANGELOG.md
