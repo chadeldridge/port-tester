@@ -66,6 +66,8 @@ jobs:
       - rustfmt
       - clippy
       - lockfile
+      - spellcheck
+      - msrv
       #- stale-label
     name: Lint for code quality and style
     runs-on: ubuntu-latest
@@ -116,6 +118,23 @@ jobs:
         run: rustup update stable && rustup default stable
       - name: Check Cargo.lock
         run: cargo update -p port-tester --locked
+  spellcheck:
+    name: Spell Check with Typos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git Checkout
+        uses: actions/checkout@v6
+      - name: Spell Check Repo
+        uses: crate-ci/typos@v1.42.0
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git Checkout
+        uses: actions/checkout@v6
+      - name: Install Cargo Hack
+        uses: taiki-e/install-action@cargo-hack
+      - name: Check MSRV
+        run: cargo hack check --all-targets --rust-version --workspace --ignore-private --locked
   #stale-label:
   #  runs-on: ubuntu-latest
   #  steps:
@@ -344,7 +363,7 @@ jobs:
           cp "${{ steps.bin.outputs.BIN_PATH }}" "$ARCHIVE_DIR"
 
           # README, LICENSE and CHANGELOG files
-          cp "README.md" "LICENSE-MIT.md" "LICENSE-APACHE.md" "CHANGELOG.md" "$ARCHIVE_DIR"
+          cp "README.md" "LICENSE-MIT" "LICENSE-APACHE" "CHANGELOG.md" "$ARCHIVE_DIR"
 
           # base compressed package
           pushd "${PKG_STAGING}/" >/dev/null
@@ -390,8 +409,8 @@ jobs:
 
           # README and LICENSE
           install -Dm644 "README.md" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/README.md"
-          install -Dm644 "LICENSE-MIT.md" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/LICENSE-MIT.md"
-          install -Dm644 "LICENSE-APACHE.md" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/LICENSE-APACHE.md"
+          install -Dm644 "LICENSE-MIT" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/LICENSE-MIT"
+          install -Dm644 "LICENSE-APACHE" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/LICENSE-APACHE"
           install -Dm644 "CHANGELOG.md" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/changelog"
           gzip -n --best "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/changelog"
 
