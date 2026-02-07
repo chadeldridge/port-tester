@@ -2,6 +2,9 @@
 Port tester (pt) provides repetitive port tests and returns a summary, similar to ping.
 For use in detecting connectivity issues to a specific service.
 
+## Installation
+Release packages can be found [here](https://github.com/chadeldridge/port-tester/releases).
+
 ## Help
 ```
 Usage: pt [OPTIONS] <HOST> [PORT]
@@ -83,3 +86,6 @@ For single attempts with silent (-s), pt will return a success (0) or error (1) 
 ❯ pt -c 1 -s 8.8.8.8 80; echo $?
 1
 ```
+
+## Contributing
+If you would like to contribute, see [here](CONTRIBUTING.md).

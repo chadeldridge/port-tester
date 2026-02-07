@@ -310,8 +310,8 @@ jobs:
       - name: Run pt port 53
         shell: bash
         run: $BUILD_CMD run --locked --target=${{ matrix.job.target }} -- 8.8.8.8 53 -c 1 -s
-      # Creates a tarball or zip file containing the built binary and other assets for each build type.
 
+      # Creates a tarball or zip file containing the built binary and other assets for each build type.
       - name: Create tarball
         id: package
         shell: bash
