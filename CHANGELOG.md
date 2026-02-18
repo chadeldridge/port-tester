@@ -5,6 +5,7 @@ See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
 ## unreleased
 ### Added
 ### Changed
+  - Separated binary and library functionality. #2 (@chadeldridge)
 ### Deprecated
 ### Removed
 ### Fixed
