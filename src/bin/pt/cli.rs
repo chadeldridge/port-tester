@@ -107,7 +107,7 @@ impl Cli {
 
         let is_verbose = !matches!(&c.args.verbose, 0);
 
-        // Print help and exit if conflicting arguements are given.
+        // Print help and exit if conflicting arguments are given.
         if count_true_u8!(c.args.silent, c.args.quiet, is_verbose) > 1 {
             eprintln!("You may only specify one of: --quiet, --silent, --verbose");
             let _ = Args::command().print_help();

@@ -8,7 +8,7 @@ use std::sync::Mutex;
 
 #[derive(Clone, Debug)]
 pub struct Host {
-    /// Remote hostname, like exmaple.com, which will be resolved to an ip address.
+    /// Remote hostname, like example.com, which will be resolved to an ip address.
     name: String,
     /// Remote ip:port to connect to.
     addr: SocketAddr,
