@@ -6,6 +6,9 @@ on:
 jobs:
   check-changelog:
     runs-on: ubuntu-latest
+    env:
+      PR_NUMBER: ${{ github.event.number }}
+      PR_BASE: ${{ github.base_ref }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -24,4 +27,4 @@ jobs:
           echo "Grepping for PR info (see CONTRIBUTING.md):"
           grep "#${PR_NUMBER}\\b.*${PR_SUBMITTER}\\b" <<< "$ADDED"
           # TODO: Implement converting PR #s to links automatically. Should this be done here or on release?
-          #sed -Ei 's|#([0-9]+)[[:space:]]+\(@(.+)\)|[#\1](https://github.com/chadeldridge/project-name/pull/\1) \(@\2\)|g' CHANGELOG.md
+          #sed -Ei 's|#([0-9]+)[[:space:]]+\(@(.+)\)|[#\1](https://github.com/chadeldridge/port-tester/pull/\1) \(@\2\)|g' CHANGELOG.md
