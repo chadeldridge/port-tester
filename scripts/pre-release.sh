@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -e
 
-cd ../
+parent=$(basename "$(pwd)")
+if [[ "$parent" == "scripts" ]]; then
+    cd ../
+fi
 
 # Run audit before sending to CICD to try and catch issues early
 cargo audit
