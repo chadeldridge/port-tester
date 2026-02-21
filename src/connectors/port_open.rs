@@ -10,11 +10,11 @@ pub fn connect(host: &Host, timeout: u64) -> Result<bool> {
 
     match result {
         Ok(_) => {
-            host.metrics.lock().unwrap().record_attempt(true);
+            host.metrics.lock().unwrap().record(true);
             Ok(true)
         }
         Err(e) => {
-            host.metrics.lock().unwrap().record_attempt(false);
+            host.metrics.lock().unwrap().record(false);
             Err(Error::new(SourceError::Io(e)))
         }
     }
