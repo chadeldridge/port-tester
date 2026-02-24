@@ -1,18 +1,18 @@
 #[derive(Debug, Default)]
 pub struct Metrics {
     pub attempts: u32,
-    pub successes: u32,
-    pub failures: u32,
+    pub success: u32,
+    pub failure: u32,
 }
 
 impl Metrics {
     /// Record a connection attempt. `success` indicates whether the attempt was successful.
-    pub fn record_attempt(&mut self, success: bool) {
+    pub fn record(&mut self, success: bool) {
         self.attempts += 1;
         if success {
-            self.successes += 1;
+            self.success += 1;
         } else {
-            self.failures += 1;
+            self.failure += 1;
         }
     }
 
@@ -20,14 +20,52 @@ impl Metrics {
     /// Output Format: "<attempts> attempts, success: <successes>, fail: <failures>, failure rate: <failure_rate>%"
     pub fn report(&self) {
         let failure_rate = if self.attempts > 0 {
-            (self.failures as f64 / self.attempts as f64) * 100.0
+            (self.failure as f64 / self.attempts as f64) * 100.0
         } else {
             0.0
         };
 
         println!(
             "{} attempts, success: {}, fail: {}, failure rate: {:.2}%",
-            self.attempts, self.successes, self.failures, failure_rate
+            self.attempts, self.success, self.failure, failure_rate
         );
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_record() {
+        let mut m = Metrics::default();
+        assert_eq!(m.attempts, 0);
+        assert_eq!(m.success, 0);
+        assert_eq!(m.failure, 0);
+
+        m.record(true);
+        assert_eq!(m.attempts, 1);
+        assert_eq!(m.success, 1);
+        assert_eq!(m.failure, 0);
+
+        m.record(false);
+        assert_eq!(m.attempts, 2);
+        assert_eq!(m.success, 1);
+        assert_eq!(m.failure, 1);
+    }
+
+    /*
+    #[test]
+    fn test_report() {
+        let mut m = Metrics::default();
+        m.record(true);
+        m.record(false);
+        m.report();
+
+        assert_eq!(
+            output,
+            "2 attempts, success: 1, fail: 1, failure rate: 50.00%".to_string()
+        );
+    }
+    */
 }

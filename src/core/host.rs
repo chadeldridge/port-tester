@@ -78,3 +78,33 @@ pub fn to_socket(host: &str, port: u16) -> Result<SocketAddr> {
 
     Ok(SocketAddr::new(ip, port))
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_default() {
+        let d = Host::default();
+        assert_eq!(d.name, "".to_string());
+        assert_eq!(
+            d.addr,
+            SocketAddr::new(IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 0)
+        );
+        assert_eq!(d.metrics.lock().unwrap().attempts, 0);
+    }
+
+    #[test]
+    fn test_new() {
+        let r = Host::new("8.8.8.8", 80);
+        assert!(r.is_ok());
+
+        let d = r.unwrap();
+        assert_eq!(d.name, "8.8.8.8".to_string());
+        assert_eq!(
+            d.addr,
+            SocketAddr::new(IpAddr::V4(std::net::Ipv4Addr::new(8, 8, 8, 8)), 80)
+        );
+        assert_eq!(d.metrics.lock().unwrap().attempts, 0);
+    }
+}
