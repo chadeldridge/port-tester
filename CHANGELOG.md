@@ -4,6 +4,7 @@ See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
 
 ## unreleased
 ### Added
+  - Added basic testing in all modules and the binary. #3 (@chadeldridge)
 ### Changed
   - Separated binary and library functionality. #2 (@chadeldridge)
 ### Deprecated
