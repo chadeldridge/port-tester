@@ -11,7 +11,7 @@ mod cli;
 const DEFAULT_LOG_LEVEL: &str = "error";
 
 fn main() {
-    let cli = cli::Cli::new();
+    let cli = cli::Cli::new(cli::Args::new());
     setup_logger(&cli.verbose);
 
     let mut verbose = &Verbosity::default();

@@ -31,3 +31,41 @@ impl Metrics {
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_record() {
+        let mut m = Metrics::default();
+        assert_eq!(m.attempts, 0);
+        assert_eq!(m.success, 0);
+        assert_eq!(m.failure, 0);
+
+        m.record(true);
+        assert_eq!(m.attempts, 1);
+        assert_eq!(m.success, 1);
+        assert_eq!(m.failure, 0);
+
+        m.record(false);
+        assert_eq!(m.attempts, 2);
+        assert_eq!(m.success, 1);
+        assert_eq!(m.failure, 1);
+    }
+
+    /*
+    #[test]
+    fn test_report() {
+        let mut m = Metrics::default();
+        m.record(true);
+        m.record(false);
+        m.report();
+
+        assert_eq!(
+            output,
+            "2 attempts, success: 1, fail: 1, failure rate: 50.00%".to_string()
+        );
+    }
+    */
+}

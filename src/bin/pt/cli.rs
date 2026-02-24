@@ -98,10 +98,10 @@ pub struct Cli {
 }
 
 impl Cli {
-    pub fn new() -> Self {
+    pub fn new(args: Args) -> Self {
         debug!("Initializing CLI");
         let mut c = Cli {
-            args: Args::new(),
+            args,
             verbose: None,
         };
 
@@ -143,5 +143,76 @@ fn validate_host(host: &str) -> Result<String, String> {
         Ok(host.to_string())
     } else {
         Err(String::from("Invalid host format"))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_count_true() {
+        let v = vec![true, false, true];
+        assert_eq!(_count_true(v), 2);
+    }
+
+    #[test]
+    fn test_count_true_u8() {
+        let c = count_true_u8!(true, false, true);
+        assert_eq!(c, 2);
+    }
+
+    #[test]
+    fn test_validate_host() {
+        let empty = "";
+        let hostname = "example.com";
+        let ip = "1.1.1.1";
+        let invalid = "-a.com";
+
+        assert!(validate_host(empty).is_err());
+        assert!(validate_host(hostname).is_ok());
+        assert!(validate_host(ip).is_ok());
+        assert!(validate_host(invalid).is_err());
+    }
+
+    #[test]
+    fn test_cli_new() {
+        let mut args = Args::try_parse_from(vec!["pt", "1.1.1.1"]);
+        assert!(args.is_ok());
+        let mut cli = Cli::new(args.unwrap());
+        assert_eq!(cli.args.host, "1.1.1.1".to_string());
+
+        args = Args::try_parse_from(vec!["pt", "1.1.1.1", "--silent"]);
+        assert!(args.is_ok());
+        cli = Cli::new(args.unwrap());
+        assert_eq!(cli.verbose.unwrap(), Verbosity::Silent);
+    }
+
+    #[test]
+    fn test_verbosity() {
+        let mut args = Args::try_parse_from(vec!["pt", "1.1.1.1"]);
+        assert!(args.is_ok());
+        let mut cli = Cli::new(args.unwrap());
+        assert_eq!(cli.verbose, None);
+
+        args = Args::try_parse_from(vec!["pt", "1.1.1.1", "--silent"]);
+        assert!(args.is_ok());
+        cli = Cli::new(args.unwrap());
+        assert_eq!(cli.verbose.unwrap(), Verbosity::Silent);
+
+        args = Args::try_parse_from(vec!["pt", "1.1.1.1", "--quiet"]);
+        assert!(args.is_ok());
+        cli = Cli::new(args.unwrap());
+        assert_eq!(cli.verbose.unwrap(), Verbosity::Quiet);
+
+        args = Args::try_parse_from(vec!["pt", "1.1.1.1", "-v"]);
+        assert!(args.is_ok());
+        cli = Cli::new(args.unwrap());
+        assert_eq!(cli.verbose.unwrap(), Verbosity::Verbose(1));
+
+        args = Args::try_parse_from(vec!["pt", "1.1.1.1", "-vvv"]);
+        assert!(args.is_ok());
+        cli = Cli::new(args.unwrap());
+        assert_eq!(cli.verbose.unwrap(), Verbosity::Verbose(3));
     }
 }
