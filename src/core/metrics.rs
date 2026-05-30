@@ -141,6 +141,7 @@ impl Metrics {
 
         // Write an empty line as a separator.
         let _ = writeln!(report);
+        let _ = writeln!(report, "{}", self.report());
         report
     }
 }
@@ -212,23 +213,23 @@ impl MetricsResult {
                     self.status.to_string_with_verbosity(verbosity)
                 ),
                 1 => format!(
-                    "{} {:.2}s {}",
+                    "{} {:.2}ms {}",
                     self.seq,
-                    self.duration.as_seconds_f32(),
+                    self.duration.num_milliseconds(),
                     self.status.to_string_with_verbosity(verbosity)
                 ),
                 2 => format!(
-                    "{} {} {:.2}s {}",
+                    "{} {} {:.2}ms {}",
                     self.timestamp,
                     self.seq,
-                    self.duration.as_seconds_f32(),
+                    self.duration.num_milliseconds(),
                     self.status.to_string_with_verbosity(verbosity)
                 ),
                 _ => format!(
-                    "start={} seq={} dur={:.2}s status={}",
+                    "start={} seq={} dur={:.2}ms status={}",
                     self.timestamp,
                     self.seq,
-                    self.duration.as_seconds_f32(),
+                    self.duration.num_milliseconds(),
                     self.status.to_string_with_verbosity(verbosity)
                 ),
             },
@@ -343,36 +344,164 @@ impl MetricsSummary {
 
 #[cfg(test)]
 mod tests {
+    use crate::SourceError;
+
     use super::*;
 
     #[test]
-    fn test_metricssummary_record() {
-        let mut m = MetricsSummary::default();
-        assert_eq!(m.attempts, 0);
-        assert_eq!(m.success, 0);
-        assert_eq!(m.failure, 0);
+    fn test_status() {
+        // Status::Failure(None) from Default
+        let s1 = Status::default();
+        assert!(s1.is_err());
+        assert_eq!(format!("{}", s1), "fail".to_string());
+        assert_eq!(
+            s1.to_string_with_verbosity(&Verbosity::Silent),
+            "".to_string()
+        );
+        assert_eq!(
+            s1.to_string_with_verbosity(&Verbosity::Quiet),
+            "fail".to_string()
+        );
+        assert_eq!(
+            s1.to_string_with_verbosity(&Verbosity::Verbose(2)),
+            "fail".to_string()
+        );
 
-        m.record(&Status::Success);
-        assert_eq!(m.attempts, 1);
-        assert_eq!(m.success, 1);
-        assert_eq!(m.failure, 0);
+        // Status::Success
+        let s2 = Status::Success;
+        assert!(!s2.is_err());
+        assert_eq!(format!("{}", s2), "ok".to_string());
+        assert_eq!(
+            s2.to_string_with_verbosity(&Verbosity::Silent),
+            "ok".to_string()
+        );
+        assert_eq!(
+            s2.to_string_with_verbosity(&Verbosity::Quiet),
+            "ok".to_string()
+        );
+        assert_eq!(
+            s2.to_string_with_verbosity(&Verbosity::Verbose(2)),
+            "ok".to_string()
+        );
 
-        m.record(&Status::Failure(None));
-        assert_eq!(m.attempts, 2);
-        assert_eq!(m.success, 1);
-        assert_eq!(m.failure, 1);
+        // Status::Failure(Error)
+        let s3 = Status::Failure(Some(Error::new(SourceError::from("test error"))));
+        assert!(s3.is_err());
+        assert_eq!(format!("{}", s3), "fail: test error".to_string());
+        assert_eq!(
+            s3.to_string_with_verbosity(&Verbosity::Silent),
+            "".to_string()
+        );
+        assert_eq!(
+            s3.to_string_with_verbosity(&Verbosity::Quiet),
+            "fail".to_string()
+        );
+        assert_eq!(
+            s3.to_string_with_verbosity(&Verbosity::Verbose(2)),
+            "fail: test error".to_string()
+        );
     }
 
     #[test]
-    fn test_metricssummary_report() {
-        let mut m = MetricsSummary::default();
-        m.record(&Status::Success);
-        m.record(&Status::Failure(None));
-        let output = m.report();
-
+    fn test_metricsresult() {
+        let dur = chrono::Duration::try_milliseconds(1234).unwrap();
+        let start = Local::now() - dur;
+        let mr = MetricsResult::new(1, start, dur, Status::Success);
+        assert!(!mr.is_err());
+        assert_eq!(mr.to_string_with_verbosity(&Verbosity::Normal), "1 ok");
+        assert_eq!(mr.to_string_with_verbosity(&Verbosity::Quiet), "1 ok");
+        assert_eq!(mr.to_string_with_verbosity(&Verbosity::Silent), "");
+        assert_eq!(mr.to_string_with_verbosity(&Verbosity::Verbose(0)), "1 ok");
         assert_eq!(
-            output,
+            mr.to_string_with_verbosity(&Verbosity::Verbose(1)),
+            "1 1234ms ok"
+        );
+        assert_eq!(
+            mr.to_string_with_verbosity(&Verbosity::Verbose(2)),
+            format!("{} 1 1234ms ok", start)
+        );
+        assert_eq!(
+            mr.to_string_with_verbosity(&Verbosity::Verbose(3)),
+            format!("start={} seq=1 dur=1234ms status=ok", start)
+        );
+
+        // Test with Failure(None).
+        let mr = MetricsResult::new(1, start, dur, Status::Failure(None));
+        assert!(mr.is_err());
+        assert_eq!(mr.to_string_with_verbosity(&Verbosity::Normal), "1 fail");
+
+        // Test with Failure(Some(Error))
+        let mr = MetricsResult::new(
+            1,
+            start,
+            dur,
+            Status::Failure(Some(Error::new(SourceError::from("test error")))),
+        );
+        assert!(mr.is_err());
+        assert_eq!(
+            mr.to_string_with_verbosity(&Verbosity::Normal),
+            "1 fail: test error"
+        );
+    }
+
+    #[test]
+    fn test_metricssummary() {
+        let mut ms = MetricsSummary::default();
+        assert_eq!(ms.attempts, 0);
+        assert_eq!(ms.success, 0);
+        assert_eq!(ms.failure, 0);
+
+        ms.record(&Status::Success);
+        assert_eq!(ms.attempts, 1);
+        assert_eq!(ms.success, 1);
+        assert_eq!(ms.failure, 0);
+
+        ms.record(&Status::Failure(None));
+        assert_eq!(ms.attempts, 2);
+        assert_eq!(ms.success, 1);
+        assert_eq!(ms.failure, 1);
+
+        assert_eq!(ms.failure_rate(), 50.00);
+        // Test report()
+        assert_eq!(
+            ms.report(),
             "attempts: 2, success: 1, fail: 1, failure rate: 50.00%".to_string()
+        );
+    }
+
+    #[test]
+    fn test_metrics() {
+        let mut m = Metrics::new(&Verbosity::Normal);
+        assert_eq!(m.verbosity(), Verbosity::Normal);
+        let dur = chrono::Duration::try_milliseconds(1234).unwrap();
+        m.record(1, Local::now() - dur, dur, Status::Success);
+        m.record(
+            2,
+            Local::now() - dur,
+            dur,
+            Status::Failure(Some(Error::new(SourceError::from("test error")))),
+        );
+        assert_eq!(m.len(), 2);
+        assert_eq!(m.iter().count(), 2);
+        assert_eq!(m.attempts(), 2);
+        assert_eq!(m.success(), 1);
+        assert_eq!(m.failure(), 1);
+        assert_eq!(m.failure_rate(), 50.00);
+
+        // Test pulling back a result.
+        assert!(m.result(2).unwrap().is_err());
+
+        // Test report()
+        assert_eq!(
+            m.report(),
+            "attempts: 2, success: 1, fail: 1, failure rate: 50.00%".to_string()
+        );
+
+        // Test report()
+        assert_eq!(
+            m.full_report(),
+            "1 ok\n2 fail: test error\n\nattempts: 2, success: 1, fail: 1, failure rate: 50.00%\n"
+                .to_string()
         );
     }
 }
