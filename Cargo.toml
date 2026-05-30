@@ -19,6 +19,7 @@ test = false
 doc = true
 
 [dependencies]
+chrono = "0.4.44"
 clap = { version = "4.5.54", features = ["derive"] }
 ctrlc = "3.5.1"
 dns-lookup = "3.0.1"

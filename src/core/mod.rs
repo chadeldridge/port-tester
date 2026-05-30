@@ -1,4 +1,5 @@
 pub use self::error::*;
+pub use self::metrics::Metrics;
 
 pub mod error;
 pub mod host;

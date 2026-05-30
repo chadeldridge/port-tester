@@ -46,16 +46,20 @@ pub struct Args {
     /// Use 0 for infinite attempts.
     #[arg(short, long, default_value_t = DEFAULT_COUNT)]
     pub count: u32,
+    /*
     /// Produce a single blob report, like JSON, at the end instead of normal output which each
     /// attempt. Ignores report_interval.
     #[arg(short, long, default_value_t = false)]
     pub blob_report: bool,
+    */
     /// Interval between attempts in seconds.
     #[arg(short, long, default_value_t = DEFAULT_INTERVAL)]
     pub interval: u64,
+    /*
     /// Produce all output in JSON when true.
     #[arg(long, default_value_t = false)]
     pub json: bool,
+    */
     /// Interval to output intermediate reports.
     /// Default is 0 (no intermediate reports).
     /// If set to N, a report will be printed every N attempts.
@@ -121,6 +125,7 @@ impl Cli {
             std::process::exit(3);
         }
 
+        /*
         // Return an error of blob_report was called without a count. Required a count to reduce
         // the chance of filling up memory.
         if c.args.blob_report && c.args.count == 0 {
@@ -128,6 +133,7 @@ impl Cli {
             let _ = Args::command().print_help();
             std::process::exit(3);
         }
+        */
 
         // Set verbosity so we know how much to print.
         c.verbose = c.verbosity();
