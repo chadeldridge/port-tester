@@ -3,9 +3,30 @@ use std::fmt::Write;
 
 use crate::{Error, Verbosity};
 
+/// Constant value to print for Success.
 const STATUS_SUCCESS: &str = "ok";
+/// Constant value to print for Failure.
 const STATUS_FAILURE: &str = "fail";
 
+/// Holds the status of a port open attempt.
+///
+/// `Failure` wraps an optional [`Error`] for cases where the failure was caused by a connection
+/// error. Defaults to [`Status::Failure`]`(None)` via [`Default`].
+///
+/// # Examples
+///
+/// ```no_run
+/// use port_tester::core::metrics::Status;
+///
+/// let success = Status::Success;
+/// assert!(!success.is_err());
+///
+/// let failure = Status::default();
+/// assert!(failure.is_err());
+///
+/// let from_bool = Status::new(false, None);
+/// assert!(from_bool.is_err());
+/// ```
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Status {
@@ -13,12 +34,27 @@ pub enum Status {
     Failure(Option<Error>),
 }
 
+/// Defaults to [`Status::Failure`]`(None)`.
+///
+/// A default failure with no error represents an uninitialized or unrecorded state. Explicit
+/// success must always be constructed as [`Status::Success`].
+///
+/// # Examples
+///
+/// ```no_run
+/// use port_tester::core::metrics::Status;
+///
+/// let status = Status::default();
+/// assert!(status.is_err());
+/// ```
 impl Default for Status {
     fn default() -> Self {
         Status::Failure(None)
     }
 }
 
+/// Formats using [`Verbosity::Normal`]. Use [`Status::to_string_with_verbosity`] to control
+/// output detail.
 impl std::fmt::Display for Status {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -30,6 +66,20 @@ impl std::fmt::Display for Status {
 }
 
 impl Status {
+    /// Create a new [`Status`] from a boolean success flag and an optional [`Error`]. [`Error`] is
+    /// only used for failure. Use [`None`] for success.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use port_tester::core::metrics::Status;
+    ///
+    /// let success = Status::new(true, None);
+    /// assert!(!success.is_err());
+    ///
+    /// let failure = Status::new(false, None);
+    /// assert!(failure.is_err());
+    /// ```
     pub fn new(success: bool, error: Option<Error>) -> Self {
         match success {
             true => Status::Success,
@@ -37,6 +87,16 @@ impl Status {
         }
     }
 
+    /// Returns `true` if this status represents a failure.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use port_tester::core::metrics::Status;
+    ///
+    /// assert!(!Status::Success.is_err());
+    /// assert!(Status::Failure(None).is_err());
+    /// ```
     pub fn is_err(&self) -> bool {
         match self {
             Status::Success => false,
@@ -44,6 +104,31 @@ impl Status {
         }
     }
 
+    /// Returns the string representation of this status for the given [`Verbosity`] level.
+    ///
+    /// [`Status::Success`] always returns `"ok"` regardless of verbosity. For [`Status::Failure`],
+    /// the output depends on verbosity:
+    /// [`Verbosity::Silent`]: empty string
+    /// [`Verbosity::Quiet`]: `"fail"`
+    /// All others: `"fail"` or `"fail: <error>"` if an error is present
+    ///
+    /// Prefer this over [`Display`] when the verbosity level is known, as [`Display`] always
+    /// uses [`Verbosity::Normal`].
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use port_tester::core::metrics::Status;
+    /// use port_tester::Verbosity;
+    ///
+    /// let success = Status::Success;
+    /// assert_eq!(success.to_string_with_verbosity(&Verbosity::Normal), "ok");
+    ///
+    /// let failure = Status::Failure(None);
+    /// assert_eq!(failure.to_string_with_verbosity(&Verbosity::Silent), "");
+    /// assert_eq!(failure.to_string_with_verbosity(&Verbosity::Quiet), "fail");
+    /// assert_eq!(failure.to_string_with_verbosity(&Verbosity::Normal), "fail");
+    /// ```
     pub fn to_string_with_verbosity(&self, verbosity: &Verbosity) -> String {
         match self {
             Status::Success => STATUS_SUCCESS.to_string(),
@@ -59,6 +144,28 @@ impl Status {
     }
 }
 
+/// Tracks connection attempt results, summary statistics, and the configured verbosity.
+///
+/// `Metrics` is the primary entry point for recording and reporting on connection attempts.
+/// Each call to [`Metrics::record`] appends a [`MetricsResult`] and updates the internal
+/// [`MetricsSummary`]. Use [`Metrics::report`] for a one-line summary or
+/// [`Metrics::full_report`] for a per-attempt listing followed by the summary.
+///
+/// Create a new `Metrics` with [`Metrics::new`].
+///
+/// # Examples
+///
+/// ```no_run
+/// use chrono::Local;
+/// use port_tester::core::metrics::{Metrics, Status};
+/// use port_tester::Verbosity;
+///
+/// let mut m = Metrics::new(&Verbosity::Normal);
+/// let dur = chrono::TimeDelta::try_milliseconds(250).unwrap();
+/// m.record(1, Local::now(), dur, Status::Success);
+/// m.record(2, Local::now(), dur, Status::Failure(None));
+/// println!("{}", m.report());
+/// ```
 #[derive(Debug, Default)]
 #[non_exhaustive]
 pub struct Metrics {
@@ -68,6 +175,17 @@ pub struct Metrics {
 }
 
 impl Metrics {
+    /// Create a new [`Metrics`] instance with the provided [`Verbosity`] level.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use port_tester::core::metrics::Metrics;
+    /// use port_tester::Verbosity;
+    ///
+    /// let m = Metrics::new(&Verbosity::Normal);
+    /// assert!(m.is_empty());
+    /// ```
     pub fn new(verbose: &Verbosity) -> Self {
         Metrics {
             results: Vec::new(),
@@ -76,38 +194,78 @@ impl Metrics {
         }
     }
 
+    /// Returns the total number of recorded attempts.
     pub fn attempts(&self) -> u32 {
         self.summary.attempts()
     }
 
+    /// Returns the number of successful attempts.
     pub fn success(&self) -> u32 {
         self.summary.success()
     }
 
+    /// Returns the number of failed attempts.
     pub fn failure(&self) -> u32 {
         self.summary.failure()
     }
 
+    /// Returns the failure rate as a percentage (0.0 – 100.0).
     pub fn failure_rate(&self) -> f64 {
         self.summary.failure_rate()
     }
 
+    /// Returns the number of recorded results.
     pub fn len(&self) -> usize {
         self.results.len()
     }
 
+    /// Returns `true` if no results have been recorded.
     pub fn is_empty(&self) -> bool {
         self.results.is_empty()
     }
 
+    /// Returns the configured [`Verbosity`] level.
     pub fn verbosity(&self) -> Verbosity {
         self.verbosity
     }
 
+    /// Returns an iterator over the recorded [`MetricsResult`] entries in sequence order.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use chrono::Local;
+    /// use port_tester::core::metrics::{Metrics, Status};
+    /// use port_tester::Verbosity;
+    ///
+    /// let mut m = Metrics::new(&Verbosity::Normal);
+    /// let dur = chrono::TimeDelta::try_milliseconds(100).unwrap();
+    /// m.record(1, Local::now(), dur, Status::Success);
+    /// assert_eq!(m.iter().count(), 1);
+    /// ```
     pub fn iter(&self) -> impl Iterator<Item = &MetricsResult> {
         self.results.iter()
     }
 
+    /// Record a connection attempt, appending a [`MetricsResult`] and updating the
+    /// [`MetricsSummary`].
+    ///
+    /// `seq` is the 1-based sequence number of this attempt. `timestamp` is the start time and
+    /// `duration` is the time taken.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use chrono::Local;
+    /// use port_tester::core::metrics::{Metrics, Status};
+    /// use port_tester::Verbosity;
+    ///
+    /// let mut m = Metrics::new(&Verbosity::Normal);
+    /// let dur = chrono::TimeDelta::try_milliseconds(100).unwrap();
+    /// m.record(1, Local::now(), dur, Status::Success);
+    /// assert_eq!(m.attempts(), 1);
+    /// assert_eq!(m.success(), 1);
+    /// ```
     pub fn record(
         &mut self,
         seq: u32,
@@ -120,6 +278,24 @@ impl Metrics {
         self.results.push(result);
     }
 
+    /// Returns a reference to the [`MetricsResult`] for the given 1-based sequence number,
+    /// or `None` if no result exists for that sequence number.
+    ///
+    /// Sequence numbers start at 1. Passing `0` returns the first result.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use chrono::Local;
+    /// use port_tester::core::metrics::{Metrics, Status};
+    /// use port_tester::Verbosity;
+    ///
+    /// let mut m = Metrics::new(&Verbosity::Normal);
+    /// let dur = chrono::TimeDelta::try_milliseconds(100).unwrap();
+    /// m.record(1, Local::now(), dur, Status::Success);
+    /// assert!(m.result(1).is_some());
+    /// assert!(m.result(99).is_none());
+    /// ```
     pub fn result(&self, seq: u32) -> Option<&MetricsResult> {
         let i = match seq {
             0 => 0,
@@ -128,14 +304,54 @@ impl Metrics {
         self.results.get(i as usize)
     }
 
+    /// Returns a single-line summary report from the internal [`MetricsSummary`].
+    ///
+    /// Output format: `"attempts: N, success: N, fail: N, failure rate: N.NN%"`
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use chrono::Local;
+    /// use port_tester::core::metrics::{Metrics, Status};
+    /// use port_tester::Verbosity;
+    ///
+    /// let mut m = Metrics::new(&Verbosity::Normal);
+    /// let dur = chrono::TimeDelta::try_milliseconds(100).unwrap();
+    /// m.record(1, Local::now(), dur, Status::Success);
+    /// println!("{}", m.report());
+    /// // Output: attempts: 1, success: 1, fail: 0, failure rate: 0.00%
+    /// ```
     pub fn report(&self) -> String {
         self.summary.report()
     }
 
+    /// Returns a multi-line report containing each recorded result followed by the summary.
+    ///
+    /// Each result is formatted using the stored [`Verbosity`] level. Results are separated
+    /// from the summary by a blank line.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use chrono::Local;
+    /// use port_tester::core::metrics::{Metrics, Status};
+    /// use port_tester::Verbosity;
+    ///
+    /// let mut m = Metrics::new(&Verbosity::Normal);
+    /// let dur = chrono::TimeDelta::try_milliseconds(100).unwrap();
+    /// m.record(1, Local::now(), dur, Status::Success);
+    /// m.record(2, Local::now(), dur, Status::Failure(None));
+    /// println!("{}", m.full_report());
+    /// // Output:
+    /// // 1 ok
+    /// // 2 fail
+    /// //
+    /// // attempts: 2, success: 1, fail: 1, failure rate: 50.00%
+    /// ```
     pub fn full_report(&self) -> String {
         let mut report = String::new();
         for r in &self.results {
-            // There's no reason why writelin! should fail to write to String so swallow the Result.
+            // There's no reason why writeln! should fail to write to String so swallow the Result.
             let _ = writeln!(report, "{}", r.to_string_with_verbosity(&self.verbosity));
         }
 
@@ -146,6 +362,22 @@ impl Metrics {
     }
 }
 
+/// Stores the metrics for a single connection attempt.
+///
+/// `MetricsResult` is created automatically by [`Metrics::record`] and is not typically
+/// constructed directly. Access recorded results via [`Metrics::iter`] or [`Metrics::result`].
+///
+/// # Examples
+///
+/// ```no_run
+/// use chrono::Local;
+/// use port_tester::core::metrics::{MetricsResult, Status};
+///
+/// let dur = chrono::TimeDelta::try_milliseconds(150).unwrap();
+/// let mr = MetricsResult::new(1, Local::now(), dur, Status::Success);
+/// assert!(!mr.is_err());
+/// assert_eq!(mr.seq(), 1);
+/// ```
 #[derive(Debug, Default)]
 #[non_exhaustive]
 pub struct MetricsResult {
@@ -155,6 +387,8 @@ pub struct MetricsResult {
     status: Status,
 }
 
+/// Formats using [`Verbosity::Normal`]. Use [`MetricsResult::to_string_with_verbosity`] to
+/// control output detail.
 impl std::fmt::Display for MetricsResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -166,6 +400,19 @@ impl std::fmt::Display for MetricsResult {
 }
 
 impl MetricsResult {
+    /// Create a new [`MetricsResult`] for the given sequence number, timestamp, duration,
+    /// and status.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use chrono::Local;
+    /// use port_tester::core::metrics::{MetricsResult, Status};
+    ///
+    /// let dur = chrono::TimeDelta::try_milliseconds(100).unwrap();
+    /// let mr = MetricsResult::new(1, Local::now(), dur, Status::Success);
+    /// assert_eq!(mr.seq(), 1);
+    /// ```
     pub fn new(
         seq: u32,
         timestamp: chrono::DateTime<Local>,
@@ -180,22 +427,38 @@ impl MetricsResult {
         }
     }
 
+    /// Returns the 1-based sequence number of this attempt.
     pub fn seq(&self) -> u32 {
         self.seq
     }
 
+    /// Returns the timestamp when this attempt started.
     pub fn timestamp(&self) -> chrono::DateTime<Local> {
         self.timestamp
     }
 
+    /// Returns the duration of this attempt.
     pub fn duration(&self) -> chrono::TimeDelta {
         self.duration
     }
 
+    /// Returns a reference to the [`Status`] of this attempt.
     pub fn status(&self) -> &Status {
         &self.status
     }
 
+    /// Returns `true` if this result's status represents a failure.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use chrono::Local;
+    /// use port_tester::core::metrics::{MetricsResult, Status};
+    ///
+    /// let dur = chrono::TimeDelta::try_milliseconds(100).unwrap();
+    /// let mr = MetricsResult::new(1, Local::now(), dur, Status::Failure(None));
+    /// assert!(mr.is_err());
+    /// ```
     pub fn is_err(&self) -> bool {
         match self.status {
             Status::Success => false,
@@ -203,6 +466,29 @@ impl MetricsResult {
         }
     }
 
+    /// Returns the string representation of this result for the given [`Verbosity`] level.
+    ///
+    /// Output varies by verbosity:
+    /// - [`Verbosity::Silent`]: empty string
+    /// - [`Verbosity::Quiet`] and [`Verbosity::Normal`]: `"<seq> <status>"`
+    /// - [`Verbosity::Verbose(0)`]: same as [`Verbosity::Normal`]
+    /// - [`Verbosity::Verbose(1)`]: `"<seq> <duration>ms <status>"`
+    /// - [`Verbosity::Verbose(2)`]: `"<timestamp> <seq> <duration>ms <status>"`
+    /// - [`Verbosity::Verbose(3+)`]: `"start=<timestamp> seq=<seq> dur=<duration>ms status=<status>"`
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use chrono::Local;
+    /// use port_tester::core::metrics::{MetricsResult, Status};
+    /// use port_tester::Verbosity;
+    ///
+    /// let dur = chrono::TimeDelta::try_milliseconds(100).unwrap();
+    /// let mr = MetricsResult::new(1, Local::now(), dur, Status::Success);
+    /// assert_eq!(mr.to_string_with_verbosity(&Verbosity::Normal), "1 ok");
+    /// assert_eq!(mr.to_string_with_verbosity(&Verbosity::Silent), "");
+    /// assert_eq!(mr.to_string_with_verbosity(&Verbosity::Verbose(1)), "1 100ms ok");
+    /// ```
     pub fn to_string_with_verbosity(&self, verbosity: &Verbosity) -> String {
         match *verbosity {
             Verbosity::Verbose(n) => match n {
@@ -250,7 +536,7 @@ impl MetricsResult {
 
 /// A metrics store to track attempt successes and failures.
 ///
-/// Create a new MetricsSummary object with [`MetricsSummary::default`].
+/// Create a new `MetricsSummary` with [`MetricsSummary::default`].
 /// Record an attempt with [`MetricsSummary::record`].
 /// Generate a report with [`MetricsSummary::report`].
 ///
@@ -273,18 +559,24 @@ pub struct MetricsSummary {
 }
 
 impl MetricsSummary {
+    /// Returns the total number of recorded attempts.
     pub fn attempts(&self) -> u32 {
         self.attempts
     }
 
+    /// Returns the number of successful attempts.
     pub fn success(&self) -> u32 {
         self.success
     }
 
+    /// Returns the number of failed attempts.
     pub fn failure(&self) -> u32 {
         self.failure
     }
 
+    /// Returns the failure rate as a percentage (0.0 – 100.0).
+    ///
+    /// Returns `0.0` when no attempts have been recorded.
     pub fn failure_rate(&self) -> f64 {
         if self.attempts > 0 {
             (self.failure as f64 / self.attempts as f64) * 100.0
@@ -293,9 +585,10 @@ impl MetricsSummary {
         }
     }
 
-    /// Record a connection attempt.
-    /// `success` = true increments [`Metrics.success`] by 1.
-    /// `success` = false increments [`Metrics.failure`] by 1.
+    /// Record a connection attempt, incrementing `success` or `failure` accordingly.
+    ///
+    /// [`Status::Success`] increments the success counter. [`Status::Failure`] increments the
+    /// failure counter. Both increment the total attempts counter.
     ///
     /// # Examples
     ///
@@ -317,8 +610,9 @@ impl MetricsSummary {
         }
     }
 
-    /// Print a report of the collected metrics.
-    /// Output Format: "<count> attempts, success: <successes>, fail: <failures>, failure rate: <failure_rate>%"
+    /// Returns a single-line summary of the collected metrics.
+    ///
+    /// Output format: `"attempts: N, success: N, fail: N, failure rate: N.NN%"`
     ///
     /// # Examples
     ///
@@ -328,9 +622,9 @@ impl MetricsSummary {
     /// let mut ms = MetricsSummary::default();
     /// ms.record(&Status::Success);
     /// ms.record(&Status::Success);
-    /// ms.report();
+    /// println!("{}", ms.report());
     /// ```
-    /// Output: attempts: 2, success: 2, fail: 0, failure rate: 0.00%
+    /// Output: `attempts: 2, success: 2, fail: 0, failure rate: 0.00%`
     pub fn report(&self) -> String {
         format!(
             "attempts: {}, success: {}, fail: {}, failure rate: {:.2}%",
