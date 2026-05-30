@@ -1,6 +1,6 @@
-use pt::connectors::port_open::*;
-use pt::core::error::*;
-use pt::{Host, Verbosity};
+use port_tester::connectors::port_open::*;
+use port_tester::core::error::*;
+use port_tester::{Host, Verbosity};
 
 use env_logger::Env;
 use log::{debug, info};

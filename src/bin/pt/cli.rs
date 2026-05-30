@@ -1,6 +1,6 @@
 use hostname_validator::is_valid as is_valid_hostname;
 use log::debug;
-use pt::Verbosity;
+use port_tester::Verbosity;
 use std::net::IpAddr;
 
 use clap::{ArgAction, CommandFactory, Parser, value_parser};

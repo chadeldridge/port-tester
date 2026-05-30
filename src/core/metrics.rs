@@ -257,7 +257,7 @@ impl MetricsResult {
 /// # Examples
 ///
 /// ```no_run
-/// use pt::core::metrics::{MetricsSummary, Status};
+/// use port_tester::core::metrics::{MetricsSummary, Status};
 ///
 /// let mut ms = MetricsSummary::default();
 /// ms.record(&Status::Success);
@@ -300,7 +300,7 @@ impl MetricsSummary {
     /// # Examples
     ///
     /// ```no_run
-    /// use pt::core::metrics::{MetricsSummary, Status};
+    /// use port_tester::core::metrics::{MetricsSummary, Status};
     ///
     /// let mut ms = MetricsSummary::default();
     /// ms.record(&Status::Success);
@@ -323,7 +323,7 @@ impl MetricsSummary {
     /// # Examples
     ///
     /// ```no_run
-    /// use pt::core::metrics::{MetricsSummary, Status};
+    /// use port_tester::core::metrics::{MetricsSummary, Status};
     ///
     /// let mut ms = MetricsSummary::default();
     /// ms.record(&Status::Success);
