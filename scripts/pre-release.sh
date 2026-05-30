@@ -7,7 +7,7 @@ if [[ "$parent" == "scripts" ]]; then
 fi
 
 echo "update --locked..."
-cargo update -p pt --locked
+cargo update -p port_tester --locked
 
 # Run test jobs.
 echo "test --locked --release..."
