@@ -4,8 +4,16 @@ See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
 
 ## unreleased
 ### Added
+  - Added more thorough metrics module testing. #4 (@chadeldridge)
+  - Added documentation for the Metrics module. #4 (@chadeldridge)
+  - Added new Metrics struct to hold a list of MetricsResult, the MetricsSummary and Verbosity. #4 (@chadeldridge)
+  - Added MetricsResult to hold attempt number, start, duration, and Status. #4 (@chadeldridge)
+  - Added Status to record the Success or Failure of a connection attempt. #4 (@chadeldridge)
   - Added basic testing in all modules and the binary. #3 (@chadeldridge)
 ### Changed
+  - Metrics became MetricsSummary. #4 (@chadeldridge)
+  - All paths in Metrics that printed text now return String. #4 (@chadeldridge)
+  - Renamed library from pt to port_tester. pt was already taken. #4 (@chadeldridge)
   - Separated binary and library functionality. #2 (@chadeldridge)
 ### Deprecated
 ### Removed

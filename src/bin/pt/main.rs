@@ -1,6 +1,6 @@
-use pt::connectors::port_open::*;
-use pt::core::error::*;
-use pt::{Host, Verbosity};
+use port_tester::connectors::port_open::*;
+use port_tester::core::error::*;
+use port_tester::{Host, Verbosity};
 
 use env_logger::Env;
 use log::{debug, info};
@@ -39,7 +39,7 @@ fn main() {
     // Create a handler that will attempt to print a metrics report when we receive a Ctrl-C.
     ctrlc::set_handler(move || {
         println!("\nInterrupted! Generating report...");
-        metrics_clone.lock().unwrap().report();
+        println!("{}", metrics_clone.lock().unwrap().report());
         std::process::exit(0);
     })
     .expect("Error setting Ctrl-C handler");
@@ -63,13 +63,34 @@ fn main() {
             cli.args.timeout
         );
 
-        // Do not report the attempt number if in silent mode or if we are only doing one attempt.
-        if !cli.args.silent && cli.args.count != 1 {
-            print!("{} ", i);
+        // Connect to the target and record metrics.
+        //handle_results(connect(&host, cli.args.timeout), verbose, cli.args.count);
+        connect(i, &host, cli.args.timeout);
+
+        // Use a block so the MutexGuard is dropped before the intermediate report and sleep,
+        // otherwise those sites deadlock trying to re-acquire the same lock.
+        let (display_str, is_err) = {
+            let metrics = host.metrics.lock().unwrap();
+            let mr = metrics.result(i).unwrap();
+            let status = mr.status();
+            let display = match cli.args.count {
+                1 => status.to_string_with_verbosity(verbose),
+                _ => mr.to_string_with_verbosity(verbose),
+            };
+            (display, status.is_err())
+        };
+
+        if !cli.args.silent {
+            println!("{}", display_str);
         }
 
-        // Connect to the target and record metrics.
-        handle_results(connect(&host, cli.args.timeout), verbose, cli.args.count);
+        if cli.args.count == 1 {
+            if is_err {
+                std::process::exit(1);
+            } else {
+                std::process::exit(0);
+            }
+        }
 
         // Print intermediate report if report_interval is set.
         // If the count is reached, the final report will be printed after the loop.
@@ -78,7 +99,7 @@ fn main() {
             && (cli.args.count == 0 || i < cli.args.count)
         {
             print!("Intermediate report: ");
-            host.metrics.lock().unwrap().report();
+            println!("{}", host.metrics.lock().unwrap().report());
         }
 
         // Sleep between attempts unless this is the last attempt.
@@ -91,7 +112,7 @@ fn main() {
     debug!("connection attempts complete, print final report");
     // Do not give the final report for a single attempt.
     if cli.args.count != 1 {
-        host.metrics.lock().unwrap().report();
+        println!("{}", host.metrics.lock().unwrap().report());
     }
 }
 
@@ -115,27 +136,4 @@ fn exit_handler(error: &Error) -> ! {
     }
     debug!("Exiting with code {:?}", error.code());
     std::process::exit(error.code().unwrap_or(1));
-}
-
-fn handle_results(result: Result<bool>, verbose: &Verbosity, count: u32) {
-    match result {
-        Ok(_) => {
-            if !matches!(verbose, Verbosity::Silent) {
-                println!("ok");
-            } else if count == 1 {
-                std::process::exit(0);
-            }
-        }
-        Err(e) => {
-            if !matches!(verbose, Verbosity::Silent) {
-                if matches!(verbose, Verbosity::Quiet) {
-                    println!("failed");
-                } else {
-                    println!("failed: {}", e);
-                }
-            } else if count == 1 {
-                std::process::exit(1);
-            }
-        }
-    }
 }

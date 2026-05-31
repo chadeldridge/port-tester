@@ -1,4 +1,4 @@
-use crate::Metrics;
+use crate::core::Metrics;
 use crate::core::error::*;
 use dns_lookup::lookup_host;
 use std::net::IpAddr;
@@ -91,7 +91,7 @@ mod test {
             d.addr,
             SocketAddr::new(IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 0)
         );
-        assert_eq!(d.metrics.lock().unwrap().attempts, 0);
+        assert_eq!(d.metrics.lock().unwrap().attempts(), 0);
     }
 
     #[test]
@@ -105,6 +105,6 @@ mod test {
             d.addr,
             SocketAddr::new(IpAddr::V4(std::net::Ipv4Addr::new(8, 8, 8, 8)), 80)
         );
-        assert_eq!(d.metrics.lock().unwrap().attempts, 0);
+        assert_eq!(d.metrics.lock().unwrap().attempts(), 0);
     }
 }
