@@ -4,6 +4,8 @@ See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
 
 ## unreleased
 ### Added
+  - Added "serde" feature for JSON output.
+  - Added --json option to hold output until providing a final json report. #5 (@chadeldridge)
   - Added more thorough metrics module testing. #4 (@chadeldridge)
   - Added documentation for the Metrics module. #4 (@chadeldridge)
   - Added new Metrics struct to hold a list of MetricsResult, the MetricsSummary and Verbosity. #4 (@chadeldridge)
@@ -17,6 +19,7 @@ See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
   - Separated binary and library functionality. #2 (@chadeldridge)
 ### Deprecated
 ### Removed
+  - Removed `Arc<Mutex<>>` requirements for core::metrics::Metrics. #5 (@chadeldridge)
 ### Fixed
 ### Security
 
