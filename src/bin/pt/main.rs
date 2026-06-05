@@ -1,17 +1,18 @@
+use cli::{Args, Cli};
 use port_tester::connectors::port_open::*;
 use port_tester::core::error::*;
 use port_tester::{Host, Verbosity};
 
 use env_logger::Env;
 use log::{debug, info};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 mod cli;
 
 const DEFAULT_LOG_LEVEL: &str = "error";
 
 fn main() {
-    let cli = cli::Cli::new(cli::Args::new());
+    let cli = Cli::new(Args::new());
     setup_logger(&cli.verbose);
 
     let mut verbose = &Verbosity::default();
@@ -22,24 +23,26 @@ fn main() {
 
     if cli.args.host.is_empty() {
         eprintln!("Error: Host is required.");
-        cli::Cli::print_help();
+        Cli::print_help();
         std::process::exit(1);
     }
 
     // Set up Ctrl-C handler to print report on interrupt. We need to create the host object first
     // so we can access its metrics in the handler.
-    let host = match Host::new(&cli.args.host, cli.args.port) {
+    let host = Arc::new(Mutex::new(match Host::new(&cli.args.host, cli.args.port) {
         Ok(h) => h,
         Err(e) => exit_handler(&e),
-    };
-    info!("host: {}", host.name());
+    }));
+    info!("host: {}", host.lock().unwrap().name());
 
     // Clone metrics so we have access to it in the ctrlc handler.
-    let metrics_clone = Arc::clone(&host.metrics);
+    // let metrics_clone = Arc::clone(&host.metrics);
+    let cli_clone = cli.clone();
+    let host_clone = Arc::clone(&host);
     // Create a handler that will attempt to print a metrics report when we receive a Ctrl-C.
     ctrlc::set_handler(move || {
-        println!("\nInterrupted! Generating report...");
-        println!("{}", metrics_clone.lock().unwrap().report());
+        //println!("\nInterrupted! Generating report...");
+        print_report(&cli_clone, &host_clone.lock().unwrap());
         std::process::exit(0);
     })
     .expect("Error setting Ctrl-C handler");
@@ -58,20 +61,20 @@ fn main() {
         debug!(
             "attempt: {}, ip: {}, port: {}, timeout: {}",
             i,
-            host.ip(),
-            host.port(),
+            host.lock().unwrap().ip(),
+            host.lock().unwrap().port(),
             cli.args.timeout
         );
 
         // Connect to the target and record metrics.
         //handle_results(connect(&host, cli.args.timeout), verbose, cli.args.count);
-        connect(i, &host, cli.args.timeout);
+        connect(i, &mut host.lock().unwrap(), cli.args.timeout);
 
         // Use a block so the MutexGuard is dropped before the intermediate report and sleep,
         // otherwise those sites deadlock trying to re-acquire the same lock.
         let (display_str, is_err) = {
-            let metrics = host.metrics.lock().unwrap();
-            let mr = metrics.result(i).unwrap();
+            let h = host.lock().unwrap();
+            let mr = h.metrics.result(i).unwrap();
             let status = mr.status();
             let display = match cli.args.count {
                 1 => status.to_string_with_verbosity(verbose),
@@ -80,7 +83,7 @@ fn main() {
             (display, status.is_err())
         };
 
-        if !cli.args.silent {
+        if !cli.args.silent && !cli.args.json {
             println!("{}", display_str);
         }
 
@@ -94,12 +97,13 @@ fn main() {
 
         // Print intermediate report if report_interval is set.
         // If the count is reached, the final report will be printed after the loop.
-        if cli.args.report_interval > 0
+        if !cli.args.json
+            && cli.args.report_interval > 0
             && i % cli.args.report_interval == 0
             && (cli.args.count == 0 || i < cli.args.count)
         {
             print!("Intermediate report: ");
-            println!("{}", host.metrics.lock().unwrap().report());
+            println!("{}", host.lock().unwrap().metrics.report());
         }
 
         // Sleep between attempts unless this is the last attempt.
@@ -109,10 +113,25 @@ fn main() {
         }
     }
 
+    print_report(&cli, &host.lock().unwrap());
+}
+
+fn print_report(cli: &Cli, host: &Host) {
     debug!("connection attempts complete, print final report");
+    if cli.args.json {
+        let h_json_string = match host.to_json_string() {
+            Ok(j) => j,
+            Err(e) => {
+                exit_handler(&e);
+            }
+        };
+        println!("{}", h_json_string);
+        return;
+    }
+
     // Do not give the final report for a single attempt.
-    if cli.args.count != 1 {
-        println!("{}", host.metrics.lock().unwrap().report());
+    if !cli.args.json && cli.args.count != 1 {
+        println!("{}", host.metrics.report());
     }
 }
 

@@ -21,6 +21,7 @@ pub const CODE_PERMISSION_DENIED: i32 = 13;
 pub enum SourceError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[cfg(feature = "serde")]
     #[error(transparent)]
     SerdeJson(#[from] ::serde_json::Error),
     //#[error(transparent)]

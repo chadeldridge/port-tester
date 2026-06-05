@@ -29,7 +29,7 @@ fn _count_true(vec: std::vec::Vec<bool>) -> usize {
     vec.into_iter().filter(|&b| b).count()
 }
 
-#[derive(Debug, Default, Parser)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Parser)]
 //#[command(disable_help_flag = true, version, about, long_about = None)]
 #[command(version, about, long_about = None)]
 pub struct Args {
@@ -55,11 +55,9 @@ pub struct Args {
     /// Interval between attempts in seconds.
     #[arg(short, long, default_value_t = DEFAULT_INTERVAL)]
     pub interval: u64,
-    /*
-    /// Produce all output in JSON when true.
-    #[arg(long, default_value_t = false)]
+    /// Produce all output in JSON on exit. Will not print output until the end.
+    #[arg(long, conflicts_with_all = ["verbosity", "report_interval"], default_value_t = false)]
     pub json: bool,
-    */
     /// Interval to output intermediate reports.
     /// Default is 0 (no intermediate reports).
     /// If set to N, a report will be printed every N attempts.
@@ -73,18 +71,18 @@ pub struct Args {
     /// Quiet mode.
     /// Suppress per-attempt output and attempt errors only showing sequence numbers and each result
     /// as 'ok' or 'failed'.
-    #[arg(short, long, default_value_t = false)]
+    #[arg(short, long, group = "verbosity", default_value_t = false)]
     pub quiet: bool,
     /// Silent mode.
     /// Suppress output except for errors and final report.
-    #[arg(short, long, default_value_t = false)]
+    #[arg(short, long, group = "verbosity", default_value_t = false)]
     pub silent: bool,
     /// Verbose level.
     /// Default to 1.
     /// 1 = warnings
     /// 2 = debug
     /// 3 = trace
-    #[arg(short, long, action = ArgAction::Count, default_value_t = 0)]
+    #[arg(short, long, group = "verbosity", action = ArgAction::Count, default_value_t = 0)]
     pub verbose: u8,
 }
 
@@ -102,7 +100,7 @@ impl Args {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Cli {
     pub args: Args,
     pub verbose: Option<Verbosity>,

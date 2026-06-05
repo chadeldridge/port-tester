@@ -1,7 +1,11 @@
 use chrono::Local;
 use std::fmt::Write;
 
+use crate::core::error::Result;
 use crate::{Error, Verbosity};
+
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 /// Constant value to print for Success.
 const STATUS_SUCCESS: &str = "ok";
@@ -141,6 +145,108 @@ impl Status {
                 },
             },
         }
+    }
+}
+
+/// Serializable representation of a single connection attempt result.
+///
+/// Constructed via [`MetricsJSON`] from [`Metrics::to_json`]. All fields use plain types so no
+/// lifetime or `Clone` bound is needed on the internal [`MetricsResult`] or [`Status`] types.
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Debug, Default, Clone)]
+#[non_exhaustive]
+pub struct MetricsResultJSON {
+    seq: u32,
+    timestamp: String,
+    duration_ms: i64,
+    status: String,
+    is_err: bool,
+}
+
+impl MetricsResultJSON {
+    /// Returns the 1-based sequence number of this attempt.
+    pub fn seq(&self) -> u32 {
+        self.seq
+    }
+
+    /// Returns the RFC 3339 timestamp string for when this attempt started.
+    pub fn timestamp(&self) -> &str {
+        &self.timestamp
+    }
+
+    /// Returns the duration of this attempt in milliseconds.
+    pub fn duration_ms(&self) -> i64 {
+        self.duration_ms
+    }
+
+    /// Returns the status string (`"ok"` or `"fail"` / `"fail: <error>"`).
+    pub fn status(&self) -> &str {
+        &self.status
+    }
+
+    /// Returns `true` if this result's status represents a failure.
+    pub fn is_err(&self) -> bool {
+        self.is_err
+    }
+}
+
+impl From<&MetricsResult> for MetricsResultJSON {
+    fn from(r: &MetricsResult) -> Self {
+        MetricsResultJSON {
+            seq: r.seq,
+            timestamp: r.timestamp.to_rfc3339(),
+            duration_ms: r.duration.num_milliseconds(),
+            status: r.status.to_string(),
+            is_err: r.is_err(),
+        }
+    }
+}
+
+/// Owned, serializable snapshot of all metrics for a connection session.
+///
+/// Produced by [`Metrics::to_json`]. Flattens the summary counters alongside the per-attempt
+/// results so the JSON output is self-contained.
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[derive(Debug, Default, Clone)]
+#[non_exhaustive]
+pub struct MetricsJSON {
+    results: Vec<MetricsResultJSON>,
+    attempts: u32,
+    success: u32,
+    failure: u32,
+    failure_rate: f64,
+}
+
+impl MetricsJSON {
+    /// Returns a slice of the per-attempt results.
+    pub fn results(&self) -> &[MetricsResultJSON] {
+        &self.results
+    }
+
+    /// Returns the total number of recorded attempts.
+    pub fn attempts(&self) -> u32 {
+        self.attempts
+    }
+
+    /// Returns the number of successful attempts.
+    pub fn success(&self) -> u32 {
+        self.success
+    }
+
+    /// Returns the number of failed attempts.
+    pub fn failure(&self) -> u32 {
+        self.failure
+    }
+
+    /// Returns the failure rate as a percentage (0.0 – 100.0).
+    pub fn failure_rate(&self) -> f64 {
+        self.failure_rate
+    }
+
+    /// Serializes the current metrics to a JSON string.
+    #[cfg(feature = "serde")]
+    pub fn to_json_string(&self) -> Result<String> {
+        serde_json::to_string(&self).map_err(|e| Error::new(crate::SourceError::SerdeJson(e)))
     }
 }
 
@@ -359,6 +465,23 @@ impl Metrics {
         let _ = writeln!(report);
         let _ = writeln!(report, "{}", self.report());
         report
+    }
+
+    /// Returns an owned [`MetricsJSON`] snapshot of the current metrics state.
+    pub fn to_json(&self) -> MetricsJSON {
+        MetricsJSON {
+            results: self.results.iter().map(MetricsResultJSON::from).collect(),
+            attempts: self.summary.attempts,
+            success: self.summary.success,
+            failure: self.summary.failure,
+            failure_rate: self.summary.failure_rate(),
+        }
+    }
+
+    /// Serializes the current metrics to a JSON string.
+    #[cfg(feature = "serde")]
+    pub fn to_json_string(&self) -> Result<String> {
+        self.to_json().to_json_string()
     }
 }
 
@@ -739,6 +862,20 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "serde")]
+    fn test_metricsresultjson() {
+        let dur = chrono::Duration::try_milliseconds(1234).unwrap();
+        let start = Local::now() - dur;
+        let mr = MetricsResult::new(1, start, dur, Status::Success);
+        let mr_json = MetricsResultJSON::from(&mr);
+        assert!(!mr_json.is_err());
+        assert_eq!(mr_json.seq(), 1);
+        assert_eq!(mr_json.timestamp(), start.to_rfc3339());
+        assert_eq!(mr_json.duration_ms(), 1234);
+        assert_eq!(mr_json.status(), "ok");
+    }
+
+    #[test]
     fn test_metricssummary() {
         let mut ms = MetricsSummary::default();
         assert_eq!(ms.attempts, 0);
@@ -797,5 +934,30 @@ mod tests {
             "1 ok\n2 fail: test error\n\nattempts: 2, success: 1, fail: 1, failure rate: 50.00%\n"
                 .to_string()
         );
+    }
+
+    #[test]
+    #[cfg(feature = "serde")]
+    fn test_metricsjson() {
+        let mut m = Metrics::new(&Verbosity::Normal);
+        assert_eq!(m.verbosity(), Verbosity::Normal);
+        let dur = chrono::Duration::try_milliseconds(1234).unwrap();
+        m.record(1, Local::now() - dur, dur, Status::Success);
+        m.record(
+            2,
+            Local::now() - dur,
+            dur,
+            Status::Failure(Some(Error::new(SourceError::from("test error")))),
+        );
+        let m_json = m.to_json();
+        assert_eq!(m_json.attempts(), 2);
+        assert_eq!(m_json.success(), 1);
+        assert_eq!(m_json.failure(), 1);
+        assert_eq!(m_json.failure_rate(), 50.00);
+
+        // Test pulling back a result.
+        let m_string = m_json.to_json_string();
+        assert!(m_string.is_ok());
+        assert_ne!(m_string.unwrap(), "".to_string());
     }
 }
