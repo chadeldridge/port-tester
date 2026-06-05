@@ -4,7 +4,7 @@ See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
 
 ## unreleased
 ### Added
-  - Added "serde" feature for JSON output.
+  - Added "serde" feature for JSON output. #5 (@chadeldridge)
   - Added --json option to hold output until providing a final json report. #5 (@chadeldridge)
   - Added more thorough metrics module testing. #4 (@chadeldridge)
   - Added documentation for the Metrics module. #4 (@chadeldridge)
