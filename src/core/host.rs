@@ -234,7 +234,7 @@ mod test {
         assert!(r.is_ok());
         let h = r.unwrap();
         assert_eq!(h.name(), "localhost");
-        assert_eq!(h.ip(), IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)));
+        assert!(h.ip().is_loopback());
         assert_eq!(h.port(), 80);
     }
 
