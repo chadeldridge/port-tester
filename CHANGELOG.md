@@ -4,6 +4,9 @@ See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
 
 ## unreleased
 ### Added
+  - Added support for testing multiple resolved IP addresses in sequence. #7 (@chadeldridge)
+  - Added `scripts/qa.sh` for end-to-end functional testing. #7 (@chadeldridge)
+  - Added documentation linting. #7 (@chadeldridge)
   - Added documentation for the Host module to align with Rust API Guidelines. #6 (@chadeldridge)
   - Added thorough testing for the Host module. #6 (@chadeldridge)
   - Added "serde" feature for JSON output. #5 (@chadeldridge)
@@ -15,6 +18,9 @@ See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
   - Added Status to record the Success or Failure of a connection attempt. #4 (@chadeldridge)
   - Added basic testing in all modules and the binary. #3 (@chadeldridge)
 ### Changed
+  - Refactored `Metrics::result` to use checked_sub instead of a match. Returns `None` if `seq` < 1. #7 (@chadeldridge)
+  - Refactored `Host` to store multiple addresses and updated connection logic to iterate through them. #7 (@chadeldridge)
+  - Updated `README.md` to align with current CLI arguments and JSON output format. #7 (@chadeldridge)
   - Updated Metrics module documentation to align with Rust API Guidelines. #6 (@chadeldridge)
   - Made `Host` fields private and added getter methods to follow Rust API Guidelines. #6 (@chadeldridge)
   - Metrics became MetricsSummary. #4 (@chadeldridge)
@@ -26,6 +32,9 @@ See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
   - Removed unused is_err field in `MetricsResultJSON`. #6 (@chadeldridge)
   - Removed `Arc<Mutex<>>` requirements for core::metrics::Metrics. #5 (@chadeldridge)
 ### Fixed
+  - Fixed broken intra-doc links in `Metrics` documentation. #7 (@chadeldridge)
+  - Fixed terminology inconsistencies in documentation and help text. #7 (@chadeldridge)
+  - Standardized `chrono` duration types and formatting in metrics tests. #7 (@chadeldridge)
 ### Security
 
 ## v0.1.0 (2026-02-01)
