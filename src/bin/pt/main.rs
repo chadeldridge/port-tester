@@ -67,7 +67,6 @@ fn main() {
         );
 
         // Connect to the target and record metrics.
-        //handle_results(connect(&host, cli.args.timeout), verbose, cli.args.count);
         connect(i, &mut host.lock().unwrap(), cli.args.timeout);
 
         // Use a block so the MutexGuard is dropped before the intermediate report and sleep,
@@ -87,7 +86,7 @@ fn main() {
             println!("{}", display_str);
         }
 
-        if cli.args.count == 1 {
+        if cli.args.count == 1 && !cli.args.json {
             if is_err {
                 std::process::exit(1);
             } else {
