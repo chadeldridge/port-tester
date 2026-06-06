@@ -35,7 +35,7 @@ mod test {
 
         let mut host = r.unwrap();
         connect(1, &mut host, 2);
-        let m = host.metrics;
+        let m = host.metrics();
         let mr = m.result(1);
         assert!(mr.is_some());
         // Assert we did not get an error.
@@ -49,7 +49,7 @@ mod test {
 
         let mut host = r.unwrap();
         connect(1, &mut host, 1);
-        let m = host.metrics;
+        let m = host.metrics();
         let mr = m.result(1);
         assert!(mr.is_some());
         assert!(mr.unwrap().is_err());

@@ -74,7 +74,7 @@ fn main() {
         // otherwise those sites deadlock trying to re-acquire the same lock.
         let (display_str, is_err) = {
             let h = host.lock().unwrap();
-            let mr = h.metrics.result(i).unwrap();
+            let mr = h.metrics().result(i).unwrap();
             let status = mr.status();
             let display = match cli.args.count {
                 1 => status.to_string_with_verbosity(verbose),
@@ -103,7 +103,7 @@ fn main() {
             && (cli.args.count == 0 || i < cli.args.count)
         {
             print!("Intermediate report: ");
-            println!("{}", host.lock().unwrap().metrics.report());
+            println!("{}", host.lock().unwrap().metrics().report());
         }
 
         // Sleep between attempts unless this is the last attempt.
@@ -131,7 +131,7 @@ fn print_report(cli: &Cli, host: &Host) {
 
     // Do not give the final report for a single attempt.
     if !cli.args.json && cli.args.count != 1 {
-        println!("{}", host.metrics.report());
+        println!("{}", host.metrics().report());
     }
 }
 

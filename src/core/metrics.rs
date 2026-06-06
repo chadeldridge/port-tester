@@ -1,3 +1,11 @@
+//! Collection and reporting of port connection metrics.
+//!
+//! This module provides the infrastructure for tracking the results of connection attempts.
+//! It includes:
+//! - [`Metrics`]: The primary container for a sequence of attempt results.
+//! - [`Status`]: An enum representing success or specific failure conditions.
+//! - [`MetricsSummary`]: Aggregated statistics (success rate, attempt count).
+
 use chrono::Local;
 use std::fmt::Write;
 
@@ -14,12 +22,12 @@ const STATUS_FAILURE: &str = "fail";
 
 /// Holds the status of a port open attempt.
 ///
-/// `Failure` wraps an optional [`Error`] for cases where the failure was caused by a connection
-/// error. Defaults to [`Status::Failure`]`(None)` via [`Default`].
+/// [`Status::Failure`] wraps an optional [`Error`] for cases where the failure was caused by a
+/// specific system or network error.
 ///
 /// # Examples
 ///
-/// ```no_run
+/// ```
 /// use port_tester::core::metrics::Status;
 ///
 /// let success = Status::Success;
@@ -40,12 +48,12 @@ pub enum Status {
 
 /// Defaults to [`Status::Failure`]`(None)`.
 ///
-/// A default failure with no error represents an uninitialized or unrecorded state. Explicit
-/// success must always be constructed as [`Status::Success`].
+/// A default failure with no error represents an uninitialized or unknown state.
+/// Successful attempts must be explicitly constructed as [`Status::Success`].
 ///
 /// # Examples
 ///
-/// ```no_run
+/// ```
 /// use port_tester::core::metrics::Status;
 ///
 /// let status = Status::default();
@@ -75,7 +83,7 @@ impl Status {
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```
     /// use port_tester::core::metrics::Status;
     ///
     /// let success = Status::new(true, None);
@@ -95,7 +103,7 @@ impl Status {
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```
     /// use port_tester::core::metrics::Status;
     ///
     /// assert!(!Status::Success.is_err());
@@ -121,7 +129,7 @@ impl Status {
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```
     /// use port_tester::core::metrics::Status;
     /// use port_tester::Verbosity;
     ///
@@ -156,11 +164,14 @@ impl Status {
 #[derive(Debug, Default, Clone)]
 #[non_exhaustive]
 pub struct MetricsResultJSON {
+    /// The 1-based sequence number of the attempt.
     seq: u32,
+    /// RFC 3339 formatted start time.
     timestamp: String,
+    /// Time taken in milliseconds.
     duration_ms: i64,
+    /// String representation of the result (e.g., "ok" or "fail: connection refused").
     status: String,
-    is_err: bool,
 }
 
 impl MetricsResultJSON {
@@ -183,11 +194,6 @@ impl MetricsResultJSON {
     pub fn status(&self) -> &str {
         &self.status
     }
-
-    /// Returns `true` if this result's status represents a failure.
-    pub fn is_err(&self) -> bool {
-        self.is_err
-    }
 }
 
 impl From<&MetricsResult> for MetricsResultJSON {
@@ -197,7 +203,6 @@ impl From<&MetricsResult> for MetricsResultJSON {
             timestamp: r.timestamp.to_rfc3339(),
             duration_ms: r.duration.num_milliseconds(),
             status: r.status.to_string(),
-            is_err: r.is_err(),
         }
     }
 }
@@ -210,10 +215,15 @@ impl From<&MetricsResult> for MetricsResultJSON {
 #[derive(Debug, Default, Clone)]
 #[non_exhaustive]
 pub struct MetricsJSON {
+    /// List of all individual attempt results.
     results: Vec<MetricsResultJSON>,
+    /// Total count of attempts recorded.
     attempts: u32,
+    /// Count of successful attempts.
     success: u32,
+    /// Count of failed attempts.
     failure: u32,
+    /// Calculated failure rate (0.0 - 100.0).
     failure_rate: f64,
 }
 
@@ -244,6 +254,10 @@ impl MetricsJSON {
     }
 
     /// Serializes the current metrics to a JSON string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`Error`] if serialization fails.
     #[cfg(feature = "serde")]
     pub fn to_json_string(&self) -> Result<String> {
         serde_json::to_string(&self).map_err(|e| Error::new(crate::SourceError::SerdeJson(e)))
@@ -252,18 +266,18 @@ impl MetricsJSON {
 
 /// Tracks connection attempt results, summary statistics, and the configured verbosity.
 ///
-/// `Metrics` is the primary entry point for recording and reporting on connection attempts.
+/// `Metrics` is used for recording and reporting on connection attempts.
 /// Each call to [`Metrics::record`] appends a [`MetricsResult`] and updates the internal
-/// [`MetricsSummary`]. Use [`Metrics::report`] for a one-line summary or
-/// [`Metrics::full_report`] for a per-attempt listing followed by the summary.
+/// [`MetricsSummary`].
 ///
-/// Create a new `Metrics` with [`Metrics::new`].
+/// Use [`Metrics::report`] for a one-line summary string or [`Metrics::full_report`]
+/// for a detailed multi-line listing.
 ///
 /// # Examples
 ///
-/// ```no_run
+/// ```
 /// use chrono::Local;
-/// use port_tester::core::metrics::{Metrics, Status};
+/// use port_tester::core::metrics::{Metrics, Status, MetricsSummary};
 /// use port_tester::Verbosity;
 ///
 /// let mut m = Metrics::new(&Verbosity::Normal);
@@ -285,7 +299,7 @@ impl Metrics {
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```
     /// use port_tester::core::metrics::Metrics;
     /// use port_tester::Verbosity;
     ///
@@ -339,7 +353,7 @@ impl Metrics {
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```
     /// use chrono::Local;
     /// use port_tester::core::metrics::{Metrics, Status};
     /// use port_tester::Verbosity;
@@ -361,7 +375,7 @@ impl Metrics {
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```
     /// use chrono::Local;
     /// use port_tester::core::metrics::{Metrics, Status};
     /// use port_tester::Verbosity;
@@ -387,11 +401,12 @@ impl Metrics {
     /// Returns a reference to the [`MetricsResult`] for the given 1-based sequence number,
     /// or `None` if no result exists for that sequence number.
     ///
-    /// Sequence numbers start at 1. Passing `0` returns the first result.
+    /// Sequence numbers are 1-based. If `0` is passed, it is treated as `1` and returns
+    /// the first recorded result if it exists.
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```
     /// use chrono::Local;
     /// use port_tester::core::metrics::{Metrics, Status};
     /// use port_tester::Verbosity;
@@ -416,7 +431,7 @@ impl Metrics {
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```
     /// use chrono::Local;
     /// use port_tester::core::metrics::{Metrics, Status};
     /// use port_tester::Verbosity;
@@ -438,7 +453,7 @@ impl Metrics {
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```
     /// use chrono::Local;
     /// use port_tester::core::metrics::{Metrics, Status};
     /// use port_tester::Verbosity;
@@ -479,6 +494,10 @@ impl Metrics {
     }
 
     /// Serializes the current metrics to a JSON string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`Error`] if JSON serialization fails.
     #[cfg(feature = "serde")]
     pub fn to_json_string(&self) -> Result<String> {
         self.to_json().to_json_string()
@@ -492,7 +511,7 @@ impl Metrics {
 ///
 /// # Examples
 ///
-/// ```no_run
+/// ```
 /// use chrono::Local;
 /// use port_tester::core::metrics::{MetricsResult, Status};
 ///
@@ -528,7 +547,7 @@ impl MetricsResult {
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```
     /// use chrono::Local;
     /// use port_tester::core::metrics::{MetricsResult, Status};
     ///
@@ -574,7 +593,7 @@ impl MetricsResult {
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```
     /// use chrono::Local;
     /// use port_tester::core::metrics::{MetricsResult, Status};
     ///
@@ -601,7 +620,7 @@ impl MetricsResult {
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```
     /// use chrono::Local;
     /// use port_tester::core::metrics::{MetricsResult, Status};
     /// use port_tester::Verbosity;
@@ -665,7 +684,7 @@ impl MetricsResult {
 ///
 /// # Examples
 ///
-/// ```no_run
+/// ```
 /// use port_tester::core::metrics::{MetricsSummary, Status};
 ///
 /// let mut ms = MetricsSummary::default();
@@ -715,7 +734,7 @@ impl MetricsSummary {
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```
     /// use port_tester::core::metrics::{MetricsSummary, Status};
     ///
     /// let mut ms = MetricsSummary::default();
@@ -739,7 +758,7 @@ impl MetricsSummary {
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```
     /// use port_tester::core::metrics::{MetricsSummary, Status};
     ///
     /// let mut ms = MetricsSummary::default();
@@ -868,7 +887,6 @@ mod tests {
         let start = Local::now() - dur;
         let mr = MetricsResult::new(1, start, dur, Status::Success);
         let mr_json = MetricsResultJSON::from(&mr);
-        assert!(!mr_json.is_err());
         assert_eq!(mr_json.seq(), 1);
         assert_eq!(mr_json.timestamp(), start.to_rfc3339());
         assert_eq!(mr_json.duration_ms(), 1234);
