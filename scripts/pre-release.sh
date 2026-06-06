@@ -1,5 +1,20 @@
 #!/usr/bin/env bash
+
+OPTS=$(getopt -o "" --long no-msrv -n 'pre-release' -- "$@")
+if [ $? != 0 ]; then echo "option unknown"; exit 1; fi
+
+eval set -- "$OPTS"
+
+msrv=true
+
 set -e
+while true; do
+    case "$1" in
+            --) shift; break ;;
+            --no-msrv) msrv=false; shift ;;
+            *) echo "option unknown: $1"; exit 1 ;;
+    esac
+done
 
 parent=$(basename "$(pwd)")
 if [[ "$parent" == "scripts" ]]; then
@@ -71,13 +86,15 @@ fi
 echo audit...
 cargo audit
 
-# Find and set the MSRV (Minimum Supported Rust Version) in Cargo.toml
-if ! command -v cargo-msrv &>/dev/null; then
-    echo "cargo-msrv not installed!!!"
-    exit 1
+if [ "$msrv" == "true" ]; then
+    # Find and set the MSRV (Minimum Supported Rust Version) in Cargo.toml
+    if ! command -v cargo-msrv &>/dev/null; then
+        echo "cargo-msrv not installed!!!"
+        exit 1
+    fi
+    echo msrv...
+    cargo msrv find --write-msrv
 fi
-echo msrv...
-cargo msrv find --write-msrv
 
 # Publish library dryrun and checks.
 echo
