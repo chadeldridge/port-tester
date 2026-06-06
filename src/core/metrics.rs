@@ -124,7 +124,7 @@ impl Status {
     /// [`Verbosity::Quiet`]: `"fail"`
     /// All others: `"fail"` or `"fail: <error>"` if an error is present
     ///
-    /// Prefer this over [`Display`] when the verbosity level is known, as [`Display`] always
+    /// Prefer this over the [`std::fmt::Display`] implementation when the verbosity level is known, as it always
     /// uses [`Verbosity::Normal`].
     ///
     /// # Examples
@@ -399,10 +399,9 @@ impl Metrics {
     }
 
     /// Returns a reference to the [`MetricsResult`] for the given 1-based sequence number,
-    /// or `None` if no result exists for that sequence number.
+    /// or `None` if the sequence number is 0 or no result exists for that sequence number.
     ///
-    /// Sequence numbers are 1-based. If `0` is passed, it is treated as `1` and returns
-    /// the first recorded result if it exists.
+    /// Sequence numbers are 1-based, following conventions similar to `ping`.
     ///
     /// # Examples
     ///
@@ -418,11 +417,8 @@ impl Metrics {
     /// assert!(m.result(99).is_none());
     /// ```
     pub fn result(&self, seq: u32) -> Option<&MetricsResult> {
-        let i = match seq {
-            0 => 0,
-            _ => seq - 1,
-        };
-        self.results.get(i as usize)
+        seq.checked_sub(1)
+            .and_then(|i| self.results.get(i as usize))
     }
 
     /// Returns a single-line summary report from the internal [`MetricsSummary`].
@@ -613,10 +609,10 @@ impl MetricsResult {
     /// Output varies by verbosity:
     /// - [`Verbosity::Silent`]: empty string
     /// - [`Verbosity::Quiet`] and [`Verbosity::Normal`]: `"<seq> <status>"`
-    /// - [`Verbosity::Verbose(0)`]: same as [`Verbosity::Normal`]
-    /// - [`Verbosity::Verbose(1)`]: `"<seq> <duration>ms <status>"`
-    /// - [`Verbosity::Verbose(2)`]: `"<timestamp> <seq> <duration>ms <status>"`
-    /// - [`Verbosity::Verbose(3+)`]: `"start=<timestamp> seq=<seq> dur=<duration>ms status=<status>"`
+    /// - `Verbose(0)`: same as [`Verbosity::Normal`]
+    /// - `Verbose(1)`: `"<seq> <duration>ms <status>"`
+    /// - `Verbose(2)`: `"<timestamp> <seq> <duration>ms <status>"`
+    /// - `Verbose(3+)`: `"start=<timestamp> seq=<seq> dur=<duration>ms status=<status>"`
     ///
     /// # Examples
     ///
@@ -641,20 +637,20 @@ impl MetricsResult {
                     self.status.to_string_with_verbosity(verbosity)
                 ),
                 1 => format!(
-                    "{} {:.2}ms {}",
+                    "{} {}ms {}",
                     self.seq,
                     self.duration.num_milliseconds(),
                     self.status.to_string_with_verbosity(verbosity)
                 ),
                 2 => format!(
-                    "{} {} {:.2}ms {}",
+                    "{} {} {}ms {}",
                     self.timestamp,
                     self.seq,
                     self.duration.num_milliseconds(),
                     self.status.to_string_with_verbosity(verbosity)
                 ),
                 _ => format!(
-                    "start={} seq={} dur={:.2}ms status={}",
+                    "start={} seq={} dur={}ms status={}",
                     self.timestamp,
                     self.seq,
                     self.duration.num_milliseconds(),
@@ -840,7 +836,7 @@ mod tests {
 
     #[test]
     fn test_metricsresult() {
-        let dur = chrono::Duration::try_milliseconds(1234).unwrap();
+        let dur = chrono::TimeDelta::try_milliseconds(1234).unwrap();
         let start = Local::now() - dur;
         let mr = MetricsResult::new(1, start, dur, Status::Success);
         assert!(!mr.is_err());
@@ -883,7 +879,7 @@ mod tests {
     #[test]
     #[cfg(feature = "serde")]
     fn test_metricsresultjson() {
-        let dur = chrono::Duration::try_milliseconds(1234).unwrap();
+        let dur = chrono::TimeDelta::try_milliseconds(1234).unwrap();
         let start = Local::now() - dur;
         let mr = MetricsResult::new(1, start, dur, Status::Success);
         let mr_json = MetricsResultJSON::from(&mr);
@@ -922,7 +918,7 @@ mod tests {
     fn test_metrics() {
         let mut m = Metrics::new(&Verbosity::Normal);
         assert_eq!(m.verbosity(), Verbosity::Normal);
-        let dur = chrono::Duration::try_milliseconds(1234).unwrap();
+        let dur = chrono::TimeDelta::try_milliseconds(1234).unwrap();
         m.record(1, Local::now() - dur, dur, Status::Success);
         m.record(
             2,
@@ -959,7 +955,7 @@ mod tests {
     fn test_metricsjson() {
         let mut m = Metrics::new(&Verbosity::Normal);
         assert_eq!(m.verbosity(), Verbosity::Normal);
-        let dur = chrono::Duration::try_milliseconds(1234).unwrap();
+        let dur = chrono::TimeDelta::try_milliseconds(1234).unwrap();
         m.record(1, Local::now() - dur, dur, Status::Success);
         m.record(
             2,

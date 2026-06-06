@@ -24,7 +24,7 @@ use serde::Serialize;
 #[non_exhaustive]
 pub struct HostJSON {
     name: String,
-    addr: SocketAddr,
+    addrs: Vec<SocketAddr>,
     metrics: MetricsJSON,
 }
 
@@ -55,19 +55,19 @@ impl HostJSON {
 pub struct Host {
     /// Remote hostname, like example.com, which will be resolved to an ip address.
     name: String,
-    /// Remote ip:port to connect to.
-    addr: SocketAddr,
+    /// Resolved remote addresses to attempt.
+    addrs: Vec<SocketAddr>,
     /// Internal metrics storage for connection attempts.
     metrics: Metrics,
 }
 
-/// Defaults to an unspecified IPv4 address (0.0.0.0) on port 0 with default metrics.
+/// Defaults to an empty hostname and an unspecified IPv4 address (0.0.0.0) on port 0.
 impl Default for Host {
     fn default() -> Self {
         let ip = IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED);
         Host {
             name: "".to_string(),
-            addr: SocketAddr::new(ip, 0),
+            addrs: vec![SocketAddr::new(ip, 0)],
             metrics: Metrics::default(),
         }
     }
@@ -76,17 +76,17 @@ impl Default for Host {
 impl Host {
     /// Create a new [`Host`] by resolving the provided hostname and port.
     ///
-    /// This performs a DNS lookup immediately. If the hostname cannot be resolved,
-    /// an [`Error`] is returned.
+    /// This performs a DNS lookup immediately, collecting all available addresses.
+    /// If the hostname cannot be resolved, an [`Error`] is returned.
     ///
     /// # Errors
     ///
     /// Returns an error if the host string is invalid or if DNS resolution fails.
     pub fn new(host: &str, port: u16) -> Result<Self> {
-        let addr = to_socket(host, port)?;
+        let addrs = resolve_addresses(host, port)?;
         Ok(Host {
             name: host.to_owned(),
-            addr,
+            addrs,
             metrics: Metrics::default(),
         })
     }
@@ -96,19 +96,24 @@ impl Host {
         self.name.as_str()
     }
 
-    /// Returns the resolved [`IpAddr`].
+    /// Returns the first resolved [`IpAddr`].
     pub fn ip(&self) -> IpAddr {
-        self.addr.ip()
+        self.addrs[0].ip()
     }
 
     /// Returns the target port.
     pub fn port(&self) -> u16 {
-        self.addr.port()
+        self.addrs[0].port()
     }
 
-    /// Returns a reference to the resolved [`SocketAddr`].
+    /// Returns a reference to the primary resolved [`SocketAddr`].
     pub fn addr(&self) -> &SocketAddr {
-        &self.addr
+        &self.addrs[0]
+    }
+
+    /// Returns a slice of all resolved [`SocketAddr`]s.
+    pub fn addrs(&self) -> &[SocketAddr] {
+        &self.addrs
     }
 
     /// Returns a reference to the internal [`Metrics`].
@@ -150,7 +155,7 @@ impl Host {
     pub fn to_json(&self) -> Result<HostJSON> {
         Ok(HostJSON {
             name: self.name.clone(),
-            addr: self.addr,
+            addrs: self.addrs.clone(),
             metrics: self.metrics.to_json(),
         })
     }
@@ -162,17 +167,17 @@ impl Host {
     }
 }
 
-/// Resolves a hostname or IP string and a port into a [`SocketAddr`].
+/// Resolves a hostname or IP string and a port into one or more [`SocketAddr`]s.
 ///
 /// If `host` is a valid IP address, it is used directly. Otherwise, a DNS lookup
-/// is performed and the first resolved address is used.
+/// is performed and all resolved addresses are returned.
 ///
 /// # Errors
 ///
 /// Returns an error if DNS lookup fails or if no IP addresses are found for the hostname.
-pub fn to_socket(host: &str, port: u16) -> Result<SocketAddr> {
-    let ip = match host.parse::<IpAddr>() {
-        Ok(ip) => ip,
+pub fn resolve_addresses(host: &str, port: u16) -> Result<Vec<SocketAddr>> {
+    let ips = match host.parse::<IpAddr>() {
+        Ok(ip) => vec![ip],
         Err(_) => {
             let ips: Vec<IpAddr> = match lookup_host(host) {
                 Ok(ips) => ips.collect(),
@@ -191,11 +196,14 @@ pub fn to_socket(host: &str, port: u16) -> Result<SocketAddr> {
                 .set_code(CODE_RUNTIME_ERROR));
             }
 
-            ips[0]
+            ips
         }
     };
 
-    Ok(SocketAddr::new(ip, port))
+    Ok(ips
+        .into_iter()
+        .map(|ip| SocketAddr::new(ip, port))
+        .collect())
 }
 
 #[cfg(test)]
@@ -207,7 +215,7 @@ mod test {
         let d = Host::default();
         assert_eq!(d.name, "".to_string());
         assert_eq!(
-            d.addr,
+            d.addrs[0],
             SocketAddr::new(IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 0)
         );
         assert_eq!(d.metrics.attempts(), 0);
@@ -221,7 +229,7 @@ mod test {
         let d = r.unwrap();
         assert_eq!(d.name, "8.8.8.8".to_string());
         assert_eq!(
-            d.addr,
+            d.addrs[0],
             SocketAddr::new(IpAddr::V4(std::net::Ipv4Addr::new(8, 8, 8, 8)), 80)
         );
         assert_eq!(d.metrics.attempts(), 0);
@@ -282,17 +290,20 @@ mod test {
     #[test]
     fn test_to_socket_logic() {
         // Test IP parsing path
-        let addr = to_socket("1.1.1.1", 53).unwrap();
-        assert_eq!(addr.ip(), IpAddr::V4(std::net::Ipv4Addr::new(1, 1, 1, 1)));
-        assert_eq!(addr.port(), 53);
+        let addrs = resolve_addresses("1.1.1.1", 53).unwrap();
+        assert_eq!(
+            addrs[0].ip(),
+            IpAddr::V4(std::net::Ipv4Addr::new(1, 1, 1, 1))
+        );
+        assert_eq!(addrs[0].port(), 53);
 
         // Test DNS lookup path
-        let addr = to_socket("localhost", 80);
-        assert!(addr.is_ok());
+        let addrs = resolve_addresses("localhost", 80);
+        assert!(addrs.is_ok());
 
         // Test invalid IP
-        let addr = to_socket("999.999.999.999", 80);
-        assert!(addr.is_err());
+        let addrs = resolve_addresses("999.999.999.999", 80);
+        assert!(addrs.is_err());
     }
 
     #[test]
@@ -307,7 +318,7 @@ mod test {
         let h_json = h_json_res.unwrap();
         assert_eq!(h_json.name, "8.8.8.8".to_string());
         assert_eq!(
-            h_json.addr,
+            h_json.addrs[0],
             SocketAddr::new(IpAddr::V4(std::net::Ipv4Addr::new(8, 8, 8, 8)), 80)
         );
         assert_eq!(h_json.metrics.attempts(), 0);

@@ -1,5 +1,20 @@
 #!/usr/bin/env bash
+
+OPTS=$(getopt -o "" --long no-msrv -n 'pre-release' -- "$@")
+if [ $? != 0 ]; then echo "option unknown"; exit 1; fi
+
+eval set -- "$OPTS"
+
+msrv=true
+
 set -e
+while true; do
+    case "$1" in
+            --) shift; break ;;
+            --no-msrv) msrv=false; shift ;;
+            *) echo "option unknown: $1"; exit 1 ;;
+    esac
+done
 
 parent=$(basename "$(pwd)")
 if [[ "$parent" == "scripts" ]]; then
@@ -19,6 +34,10 @@ echo "cargo run -- 8.8.8.8 -c 1 -s"
 cargo run --locked -- 8.8.8.8 -c 1 -s
 echo "cargo run -- -v 8.8.8.8 53 -c 1"
 cargo run --locked -- -v 8.8.8.8 53 -c 1
+
+echo "documentation check..."
+# Ensure no documentation warnings exist.
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
 
 if ! command -v cargo-fmt &>/dev/null; then
     echo "cargo-fmt not installed!!!"
@@ -56,12 +75,19 @@ fi
 echo "run hack..."
 cargo hack check --all-targets --rust-version --workspace --ignore-private --locked
 
-if ! command -v cargo-semver-checks &>/dev/null; then
-    echo "cargo-semver-checks not installed! Run: cargo install cargo-semver-checks"
-    exit 1
-fi
+# Only uncomment after application has been published to crates.io.
+#if ! command -v cargo-semver-checks &>/dev/null; then
+#    echo "cargo-semver-checks not installed! Run: cargo install cargo-semver-checks"
+#    exit 1
+#fi
 #echo "semver-checks..."
 #cargo semver-checks
+
+if ! command -v cargo-udeps &>/dev/null; then
+    echo "cargo-udeps not found. Skipping unused dependency check."
+else
+    cargo udeps
+fi
 
 # Run audit before sending to CICD to try and catch issues early
 if ! command -v cargo-audit &>/dev/null; then
@@ -71,13 +97,15 @@ fi
 echo audit...
 cargo audit
 
-# Find and set the MSRV (Minimum Supported Rust Version) in Cargo.toml
-if ! command -v cargo-msrv &>/dev/null; then
-    echo "cargo-msrv not installed!!!"
-    exit 1
+if [ "$msrv" == "true" ]; then
+    # Find and set the MSRV (Minimum Supported Rust Version) in Cargo.toml
+    if ! command -v cargo-msrv &>/dev/null; then
+        echo "cargo-msrv not installed!!!"
+        exit 1
+    fi
+    echo msrv...
+    cargo msrv find --write-msrv
 fi
-echo msrv...
-cargo msrv find --write-msrv
 
 # Publish library dryrun and checks.
 echo

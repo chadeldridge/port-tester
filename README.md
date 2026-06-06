@@ -2,6 +2,8 @@
 Port tester (pt) provides repetitive port tests and returns a summary, similar to ping.
 For use in detecting connectivity issues to a specific service.
 
+> If a hostname is given and it resolves to more than one IP, pt will test each IP in sequence until one is successful. If none are successful, pt will return the error of the last attempt.
+
 ## Installation
 Release packages can be found [here](https://github.com/chadeldridge/port-tester/releases).
 
@@ -15,17 +17,21 @@ Arguments:
 
 Options:
   -c, --count <COUNT>
-          Count of connection attempts. Use 0 for infinite attempts [default: 0]
+          Count of connection attempts to perform. 0 for infinite [default: 0]
   -i, --interval <INTERVAL>
           Interval between attempts in seconds [default: 1]
+      --json
+          Produce all output in JSON on exit. Output is held until all tests are complete
   -q, --quiet
-          Quiet mode. Suppress per-attempt output and attempt errors only showing sequence numbers and each result as 'ok' or 'failed'
+          Quiet mode. Suppress per-attempt output and attempt errors only showing sequence numbers and each result as 'ok' or 'fail'
   -r, --report-interval <REPORT_INTERVAL>
           Interval to output intermediate reports. Default is 0 (no intermediate reports). If set to N, a report will be printed every N attempts [default: 0]
   -s, --silent
           Silent mode. Suppress output except for errors and final report
   -t, --timeout <TIMEOUT>
           Connection attempt timeout in seconds [default: 5]
+  -v, --verbose...
+          Verbosity level. Defaults to 1. 1 = warnings 2 = debug 3 = trace
   -h, --help
           Print help
   -V, --version
@@ -79,12 +85,14 @@ ok
 ok
 ```
 
-For single attempts with silent (-s), pt will return a success (0) or error (1) code and no other output. This can be useful for performing other actions depending on a simple sucess/fail code.
+For single attempts with silent (-s), pt will return a success (0) or error (1) code and no other output. This can be used to automate actions based on return codes.
 ```
-❯ pt -c 1 -s 8.8.8.8 53; echo $?
+❯ pt -c 1 -s 88.8.8 53; echo $?
 0
 ❯ pt -c 1 -s 8.8.8.8 80; echo $?
 1
+❯ pt -c 1 -s 8.8.8.8 80; echo $? && echo "do one thing" || echo "do another thing"
+do another thing
 ```
 
 ## Contributing

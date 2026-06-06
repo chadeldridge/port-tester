@@ -42,43 +42,35 @@ pub struct Args {
     pub port: u16,
 
     // Options
-    /// Count of connection attempts.
-    /// Use 0 for infinite attempts.
+    /// Count of connection attempts to perform.
+    /// 0 for infinite.
     #[arg(short, long, default_value_t = DEFAULT_COUNT)]
     pub count: u32,
-    /*
-    /// Produce a single blob report, like JSON, at the end instead of normal output which each
-    /// attempt. Ignores report_interval.
-    #[arg(short, long, default_value_t = false)]
-    pub blob_report: bool,
-    */
     /// Interval between attempts in seconds.
     #[arg(short, long, default_value_t = DEFAULT_INTERVAL)]
     pub interval: u64,
-    /// Produce all output in JSON on exit. Will not print output until the end.
+    /// Produce all output in JSON on exit. Output is held until all tests are complete.
     #[arg(long, conflicts_with_all = ["verbosity", "report_interval"], default_value_t = false)]
     pub json: bool,
+    /// Quiet mode.
+    /// Suppress per-attempt output and attempt errors only showing sequence numbers and each result
+    /// as 'ok' or 'fail'.
+    #[arg(short, long, group = "verbosity", default_value_t = false)]
+    pub quiet: bool,
     /// Interval to output intermediate reports.
     /// Default is 0 (no intermediate reports).
     /// If set to N, a report will be printed every N attempts.
     #[arg(short, long, default_value_t = 0)]
     pub report_interval: u32,
-    /// Connection attempt timeout in seconds.
-    #[arg(short, long, default_value_t = DEFAULT_TIMEOUT)]
-    pub timeout: u64,
-    //#[arg(long, action = clap::ArgAction::Help, help = "Print help information")]
-    //pub help: Option<bool>,
-    /// Quiet mode.
-    /// Suppress per-attempt output and attempt errors only showing sequence numbers and each result
-    /// as 'ok' or 'failed'.
-    #[arg(short, long, group = "verbosity", default_value_t = false)]
-    pub quiet: bool,
     /// Silent mode.
     /// Suppress output except for errors and final report.
     #[arg(short, long, group = "verbosity", default_value_t = false)]
     pub silent: bool,
-    /// Verbose level.
-    /// Default to 1.
+    /// Connection attempt timeout in seconds.
+    #[arg(short, long, default_value_t = DEFAULT_TIMEOUT)]
+    pub timeout: u64,
+    /// Verbosity level.
+    /// Defaults to 1.
     /// 1 = warnings
     /// 2 = debug
     /// 3 = trace
