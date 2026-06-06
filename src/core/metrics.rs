@@ -172,8 +172,6 @@ pub struct MetricsResultJSON {
     duration_ms: i64,
     /// String representation of the result (e.g., "ok" or "fail: connection refused").
     status: String,
-    /// Whether the attempt was a failure.
-    is_err: bool,
 }
 
 impl MetricsResultJSON {
@@ -196,11 +194,6 @@ impl MetricsResultJSON {
     pub fn status(&self) -> &str {
         &self.status
     }
-
-    /// Returns `true` if this result's status represents a failure.
-    pub fn is_err(&self) -> bool {
-        self.is_err
-    }
 }
 
 impl From<&MetricsResult> for MetricsResultJSON {
@@ -210,7 +203,6 @@ impl From<&MetricsResult> for MetricsResultJSON {
             timestamp: r.timestamp.to_rfc3339(),
             duration_ms: r.duration.num_milliseconds(),
             status: r.status.to_string(),
-            is_err: r.is_err(),
         }
     }
 }
@@ -895,7 +887,6 @@ mod tests {
         let start = Local::now() - dur;
         let mr = MetricsResult::new(1, start, dur, Status::Success);
         let mr_json = MetricsResultJSON::from(&mr);
-        assert!(!mr_json.is_err());
         assert_eq!(mr_json.seq(), 1);
         assert_eq!(mr_json.timestamp(), start.to_rfc3339());
         assert_eq!(mr_json.duration_ms(), 1234);

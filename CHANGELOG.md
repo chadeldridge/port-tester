@@ -23,6 +23,7 @@ See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
   - Separated binary and library functionality. #2 (@chadeldridge)
 ### Deprecated
 ### Removed
+  - Removed unused is_err field in `MetricsResultJSON`. #6 (@chadeldridge)
   - Removed `Arc<Mutex<>>` requirements for core::metrics::Metrics. #5 (@chadeldridge)
 ### Fixed
 ### Security
