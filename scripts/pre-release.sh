@@ -35,6 +35,10 @@ cargo run --locked -- 8.8.8.8 -c 1 -s
 echo "cargo run -- -v 8.8.8.8 53 -c 1"
 cargo run --locked -- -v 8.8.8.8 53 -c 1
 
+echo "documentation check..."
+# Ensure no documentation warnings exist.
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
+
 if ! command -v cargo-fmt &>/dev/null; then
     echo "cargo-fmt not installed!!!"
     exit 1
@@ -71,12 +75,19 @@ fi
 echo "run hack..."
 cargo hack check --all-targets --rust-version --workspace --ignore-private --locked
 
-if ! command -v cargo-semver-checks &>/dev/null; then
-    echo "cargo-semver-checks not installed! Run: cargo install cargo-semver-checks"
-    exit 1
-fi
+# Only uncomment after application has been published to crates.io.
+#if ! command -v cargo-semver-checks &>/dev/null; then
+#    echo "cargo-semver-checks not installed! Run: cargo install cargo-semver-checks"
+#    exit 1
+#fi
 #echo "semver-checks..."
 #cargo semver-checks
+
+if ! command -v cargo-udeps &>/dev/null; then
+    echo "cargo-udeps not found. Skipping unused dependency check."
+else
+    cargo udeps
+fi
 
 # Run audit before sending to CICD to try and catch issues early
 if ! command -v cargo-audit &>/dev/null; then
