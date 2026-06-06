@@ -399,10 +399,9 @@ impl Metrics {
     }
 
     /// Returns a reference to the [`MetricsResult`] for the given 1-based sequence number,
-    /// or `None` if no result exists for that sequence number.
+    /// or `None` if the sequence number is 0 or no result exists for that sequence number.
     ///
-    /// Sequence numbers are 1-based. If `0` is passed, it is treated as `1` and returns
-    /// the first recorded result if it exists.
+    /// Sequence numbers are 1-based, following conventions similar to `ping`.
     ///
     /// # Examples
     ///
@@ -418,11 +417,8 @@ impl Metrics {
     /// assert!(m.result(99).is_none());
     /// ```
     pub fn result(&self, seq: u32) -> Option<&MetricsResult> {
-        let i = match seq {
-            0 => 0,
-            _ => seq - 1,
-        };
-        self.results.get(i as usize)
+        seq.checked_sub(1)
+            .and_then(|i| self.results.get(i as usize))
     }
 
     /// Returns a single-line summary report from the internal [`MetricsSummary`].
