@@ -34,3 +34,4 @@ log = "0.4.29"
 serde = { version = "1.0.228", features = ["derive"], optional = true }
 serde_json = { version = "1.0.149", optional = true }
 thiserror = "2.0.18"
+ureq = "3.3.0"
