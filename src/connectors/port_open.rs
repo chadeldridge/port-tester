@@ -10,18 +10,31 @@ use std::net::TcpStream;
 // than the ability to establish a TCP connection to the specified port.
 pub fn connect(seq: u32, host: &mut Host, timeout: u64) {
     let start = Local::now();
-    let result = TcpStream::connect_timeout(host.addr(), std::time::Duration::from_secs(timeout));
-    let dur = Local::now() - start;
+    let mut last_err = None;
+    let mut success = false;
 
-    match result {
-        Ok(_) => host.record(seq, start, dur, Status::Success),
-        Err(e) => host.record(
+    // Attempt to connect to each resolved address until one succeeds.
+    for addr in host.addrs() {
+        match TcpStream::connect_timeout(addr, std::time::Duration::from_secs(timeout)) {
+            Ok(_) => {
+                success = true;
+                break;
+            }
+            Err(e) => last_err = Some(e),
+        }
+    }
+
+    let dur = Local::now() - start;
+    if success {
+        host.record(seq, start, dur, Status::Success);
+    } else {
+        host.record(
             seq,
             start,
             dur,
-            Status::new(false, Some(Error::new(SourceError::Io(e)))),
-        ),
-    };
+            Status::new(false, last_err.map(|e| Error::new(SourceError::Io(e)))),
+        );
+    }
 }
 
 #[cfg(test)]
