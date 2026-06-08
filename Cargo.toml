@@ -19,6 +19,12 @@ required-features = ["serde"]
 test = false
 doc = true
 
+[[bin]]
+name = "poke"
+path = "src/bin/poke/main.rs"
+test = false
+doc = true
+
 [features]
 default = ["serde"]
 serde = ["dep:serde", "dep:serde_json"]
