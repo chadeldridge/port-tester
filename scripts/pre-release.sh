@@ -30,10 +30,12 @@ cargo test --locked --release
 
 # Binary build and run.
 echo
-echo "cargo run -- 8.8.8.8 -c 1 -s"
-cargo run --locked -- 8.8.8.8 -c 1 -s
-echo "cargo run -- -v 8.8.8.8 53 -c 1"
-cargo run --locked -- -v 8.8.8.8 53 -c 1
+#echo "cargo run -- 8.8.8.8 -c 1 -s"
+#cargo run --locked -- 8.8.8.8 -c 1 -s
+#echo "cargo run -- -v 8.8.8.8 53 -c 1"
+#cargo run --locked -- -v 8.8.8.8 53 -c 1
+# Run our QA tests to make sure everything is working as expected.
+./scripts/qa.sh
 
 echo "documentation check..."
 # Ensure no documentation warnings exist.
