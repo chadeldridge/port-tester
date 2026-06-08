@@ -8,6 +8,10 @@ if [[ "$parent" == "scripts" ]]; then
     cd ../
 fi
 
+# Track globally
+FAILED=false
+
+# Track per binary
 PASS=0
 FAIL=0
 TOTAL=0
@@ -18,6 +22,7 @@ update_pass () {
 }
 
 update_fail () {
+    FAILED=true
     FAIL=$((FAIL+1))
     TOTAL=$((TOTAL+1))
 }
@@ -162,3 +167,7 @@ fi
 
 # Print results for pt tests
 print_results "poke"
+
+if $FAILED; then
+    exit 1
+fi
