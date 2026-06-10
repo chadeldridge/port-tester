@@ -30,13 +30,13 @@ default = ["serde"]
 serde = ["dep:serde", "dep:serde_json"]
 
 [dependencies]
-chrono = "0.4.44"
-clap = { version = "4.5.54", features = ["derive"] }
-ctrlc = "3.5.1"
+chrono = "0.4.45"
+clap = { version = "4.6.1", features = ["derive"] }
+ctrlc = "3.5.2"
 dns-lookup = "3.0.1"
-env_logger = "0.11.8"
+env_logger = "0.11.10"
 hostname-validator = "1.1.1"
-log = "0.4.29"
+log = "0.4.32"
 serde = { version = "1.0.228", features = ["derive"], optional = true }
-serde_json = { version = "1.0.149", optional = true }
+serde_json = { version = "1.0.150", optional = true }
 thiserror = "2.0.18"
