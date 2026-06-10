@@ -278,19 +278,17 @@ jobs:
           declare -A BIN_PATHS
 
           # Setup paths
-          for bin in ${{ needs.metadata.outputs.bins }}; do
+          for bin in $(echo '${{ needs.metadata.outputs.bins }}' | jq -r '.[]'); do
             BIN_NAME="${bin}${EXE_suffix}"
             BIN_PATHS["${BIN_NAME}"]="target/${{ matrix.job.target }}/release/${BIN_NAME}"
           done
 
           # Let subsequent steps know where to find the binary
-          BINS_JSON=$(printf '%s\n' "${!BIN_PATHS[@]}" | jq -R . | jq -s .)
-          echo "bin_paths=${BINS_JSON}" >> $GITHUB_OUTPUT
+          echo "bin_paths=$(printf '%s\n' "${!BIN_PATHS[@]}" | jq -R . | jq -s .)" >> $GITHUB_OUTPUT
       - name: Run tests
         shell: bash
         run: |
-          for BIN_NAME in ${{ needs.metadata.outputs.bins }}; do
-          #for BIN_NAME in "${!steps.bin.outputs.bin_paths[@]}"; do
+          for BIN_NAME in $(echo '${{ needs.metadata.outputs.bins }}' | jq -r '.[]'); do
             if [[ ${{ matrix.job.os }} = windows-* ]]
             then
               powershell.exe -command "$BUILD_CMD test --locked --target=${{ matrix.job.target }} --bin $BIN_NAME"
@@ -331,10 +329,8 @@ jobs:
           mkdir -p "${ARCHIVE_DIR}"
           mkdir -p "${ARCHIVE_DIR}/autocomplete"
 
-          # Binary
-          for BIN_NAME in ${!${{ steps.bin.outputs.bins }}[@]}"; do
-            cp "${{ steps.bin.outputs.bins }}[$BIN_NAME]" "$ARCHIVE_DIR"
-          done
+          # Binaries
+          echo "${{ steps.bin.outputs.bins }}" | jq -r '.[]' | xargs -I {} cp "{}" "$ARCHIVE_DIR"
 
           # README, LICENSE and CHANGELOG files
           cp "README.md" "LICENSE-MIT" "LICENSE-APACHE" "CHANGELOG.md" "$ARCHIVE_DIR"
@@ -372,8 +368,9 @@ jobs:
           echo "DPKG_NAME=${DPKG_NAME}" >> $GITHUB_OUTPUT
 
           # Binary
-          for BIN_NAME in ${!${{ steps.bin.outputs.bins }}[@]}"; do
-            install -Dm755 "${{ steps.bin.outputs.bins }}[$BIN_NAME]" "${DPKG_DIR}/usr/bin/${BIN_NAME}"
+          for BIN_NAME in $(echo '${{ steps.bin.outputs.bins }}' | jq -r '.[]'); do
+            path=$(echo ${{ steps.bin.outputs.bins }} | jq -r --arg key "BIN_NAME" '.[$key]')
+            install -Dm755 "$path" "${DPKG_DIR}/usr/bin/${BIN_NAME}"
           done
 
           # README and LICENSE
