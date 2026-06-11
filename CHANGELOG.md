@@ -4,6 +4,8 @@ See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
 
 ## unreleased
 ### Added
+  - Added poke executable. Poke always performs a single TCP connection attempt. #8 (@chadeldridge)
+  - Added dependabot to automate dependency updates. #8 (@chadeldridge)
   - Added support for testing multiple resolved IP addresses in sequence. #7 (@chadeldridge)
   - Added `scripts/qa.sh` for end-to-end functional testing. #7 (@chadeldridge)
   - Added documentation linting. #7 (@chadeldridge)
@@ -18,6 +20,9 @@ See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
   - Added Status to record the Success or Failure of a connection attempt. #4 (@chadeldridge)
   - Added basic testing in all modules and the binary. #3 (@chadeldridge)
 ### Changed
+  - Updated dependencies crates. chrono, clap, ctrlc, env_logger, log, serde_json #8 (@chadeldridge)
+  - `scripts/pre-release.sh` now runs `scripts/qa.sh` as a required check. #8 (@chadeldridge)
+  - Refactored CICD GitHub Actions workflow to include poke. #8 (@chadeldridge)
   - Refactored `Metrics::result` to use checked_sub instead of a match. Returns `None` if `seq` < 1. #7 (@chadeldridge)
   - Refactored `Host` to store multiple addresses and updated connection logic to iterate through them. #7 (@chadeldridge)
   - Updated `README.md` to align with current CLI arguments and JSON output format. #7 (@chadeldridge)

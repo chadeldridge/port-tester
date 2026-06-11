@@ -42,8 +42,7 @@ jobs:
           cargo metadata --no-deps --format-version 1 | jq -r '"maintainer=" + .packages[0].authors[0]' | tee -a $GITHUB_OUTPUT
           cargo metadata --no-deps --format-version 1 | jq -r '"homepage=" + .packages[0].homepage' | tee -a $GITHUB_OUTPUT
           cargo metadata --no-deps --format-version 1 | jq -r '"msrv=" + .packages[0].rust_version' | tee -a $GITHUB_OUTPUT
-          cargo metadata --no-deps --format-version 1 \
-          | jq -r '.packages[].targets[] | select(.kind[] == "bin") | "bin=\(.name)"' \
+          echo "bins=$(cargo metadata --no-deps --format-version 1 | jq -c '[.packages[].targets[] | select(.kind[]? == "bin") | .name]')" \
           | tee -a $GITHUB_OUTPUT
       - name: Check for release
         id: is-release
@@ -53,11 +52,12 @@ jobs:
           echo "is_release=${IS_RELEASE}" | tee -a $GITHUB_OUTPUT
     outputs:
       name: ${{ steps.metadata.outputs.name }}
+      pkg_name: "port-tester"
       version: ${{ steps.metadata.outputs.version }}
       maintainer: ${{ steps.metadata.outputs.maintainer }}
       homepage: ${{ steps.metadata.outputs.homepage }}
       msrv: ${{ steps.metadata.outputs.msrv }}
-      bin: ${{ steps.metadata.outputs.bin }}
+      bins: ${{ steps.metadata.outputs.bins }}
       is_release: ${{ steps.is-release.outputs.is_release }}
   # Linting heavily taken from Cargo
   lint:
@@ -124,7 +124,7 @@ jobs:
       - name: Git Checkout
         uses: actions/checkout@v6
       - name: Spell Check Repo
-        uses: crate-ci/typos@v1.42.0
+        uses: crate-ci/typos@v1.47.0
   msrv:
     runs-on: ubuntu-latest
     steps:
@@ -276,40 +276,44 @@ jobs:
             *-pc-windows-*) EXE_suffix=".exe" ;;
           esac;
 
-          # Setup paths
-          BIN_NAME="${{ needs.metadata.outputs.bin }}${EXE_suffix}"
-          BIN_PATH="target/${{ matrix.job.target }}/release/${BIN_NAME}"
+          JSON_OUTPUT=$(
+            for bin in $(echo '${{ needs.metadata.outputs.bins }}' | jq -r '.[]'); do
+              BIN_NAME="${bin}${EXE_suffix}"
+              BIN_PATH="target/${{ matrix.job.target }}/release/${BIN_NAME}"
+              printf '%s\n' "$BIN_NAME" "$BIN_PATHS"
+            done | jq -R -n -c '[inputs] | . as $in | reduce range(0; length; 2) as $i ({}; . + {($in[$i]): $in[$i+1]})'
+          )
 
           # Let subsequent steps know where to find the binary
-          echo "BIN_PATH=${BIN_PATH}" >> $GITHUB_OUTPUT
-          echo "BIN_NAME=${BIN_NAME}" >> $GITHUB_OUTPUT
-      - name: Set testing options
-        id: test-options
+          echo "bin_paths=${JSON_OUTPUT}" >> $GITHUB_OUTPUT
+      - name: Run tests
         shell: bash
         run: |
-          # test only library unit tests and binary for arm-type targets
-          unset CARGO_TEST_OPTIONS
-          unset CARGO_TEST_OPTIONS ; case ${{ matrix.job.target }} in arm-* | aarch64-*) CARGO_TEST_OPTIONS="--lib --bin ${{ needs.metadata.outputs.name }}" ;; esac;
-          echo "CARGO_TEST_OPTIONS=${CARGO_TEST_OPTIONS}" >> $GITHUB_OUTPUT
-      # We need to add testing before enabling this section
-      #- name: Run tests
-      #  shell: bash
-      #  run: |
-      #    if [[ ${{ matrix.job.os }} = windows-* ]]
-      #    then
-      #      powershell.exe -command "$BUILD_CMD test --locked --target=${{ matrix.job.target }} ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}}"
-      #    else
-      #      $BUILD_CMD test --locked --target=${{ matrix.job.target }} ${{ steps.test-options.outputs.CARGO_TEST_OPTIONS}}
-      #    fi
-
-      # Run binary test against 8.8.8.8. Return code indicates success.
+          for BIN_NAME in $(echo '${{ needs.metadata.outputs.bins }}' | jq -r '.[]'); do
+            if [[ ${{ matrix.job.os }} = windows-* ]]
+            then
+              powershell.exe -command "$BUILD_CMD test --locked --target=${{ matrix.job.target }} --bin $BIN_NAME"
+            else
+              $BUILD_CMD test --locked --target=${{ matrix.job.target }} --bin $BIN_NAME
+            fi
+          done
+      # Run binary pt test against 8.8.8.8 port 443. Return code indicates success.
       - name: Run pt
         shell: bash
-        run: $BUILD_CMD run --locked --target=${{ matrix.job.target }} -- 8.8.8.8 -c 1 -s
-      # Run binary test against 8.8.8.8 port 53. Return code indicates success.
+        run: $BUILD_CMD run --locked --target=${{ matrix.job.target }} --bin pt -- 8.8.8.8 -c 1 -s
+      # Run binary pt test against 8.8.8.8 port 53. Return code indicates success.
       - name: Run pt port 53
         shell: bash
-        run: $BUILD_CMD run --locked --target=${{ matrix.job.target }} -- 8.8.8.8 53 -c 1 -s
+        run: $BUILD_CMD run --locked --target=${{ matrix.job.target }} --bin pt -- 8.8.8.8 53 -c 1 -s
+
+      # Run binary poke test against 8.8.8.8 port 443. Return code indicates success.
+      - name: Run pt
+        shell: bash
+        run: $BUILD_CMD run --locked --target=${{ matrix.job.target }} --bin poke -- 8.8.8.8 -s
+      # Run binary poke test against 8.8.8.8 port 53. Return code indicates success.
+      - name: Run pt port 53
+        shell: bash
+        run: $BUILD_CMD run --locked --target=${{ matrix.job.target }} --bin poke -- 8.8.8.8 53 -s
 
       # Creates a tarball or zip file containing the built binary and other assets for each build type.
       - name: Create tarball
@@ -317,7 +321,7 @@ jobs:
         shell: bash
         run: |
           PKG_suffix=".tar.gz" ; case ${{ matrix.job.target }} in *-pc-windows-*) PKG_suffix=".zip" ;; esac;
-          PKG_BASENAME=${{ needs.metadata.outputs.bin}}-v${{ needs.metadata.outputs.version }}-${{ matrix.job.target }}
+          PKG_BASENAME=${{ needs.metadata.outputs.pkg_name }}-v${{ needs.metadata.outputs.version }}-${{ matrix.job.target }}
           PKG_NAME=${PKG_BASENAME}${PKG_suffix}
           echo "PKG_NAME=${PKG_NAME}" >> $GITHUB_OUTPUT
 
@@ -326,8 +330,8 @@ jobs:
           mkdir -p "${ARCHIVE_DIR}"
           mkdir -p "${ARCHIVE_DIR}/autocomplete"
 
-          # Binary
-          cp "${{ steps.bin.outputs.BIN_PATH }}" "$ARCHIVE_DIR"
+          # Binaries
+          echo "${{ steps.bin.outputs.bins }}" | jq -r '.[]' | xargs -I {} cp "{}" "$ARCHIVE_DIR"
 
           # README, LICENSE and CHANGELOG files
           cp "README.md" "LICENSE-MIT" "LICENSE-APACHE" "CHANGELOG.md" "$ARCHIVE_DIR"
@@ -354,25 +358,21 @@ jobs:
           DPKG_DIR="${DPKG_STAGING}/dpkg"
           mkdir -p "${DPKG_DIR}"
 
-          DPKG_BASENAME=${{ needs.metadata.outputs.bin }}
-          DPKG_CONFLICTS=${{ needs.metadata.outputs.bin }}-musl
-          case ${{ matrix.job.target }} in *-musl) DPKG_BASENAME=${{ needs.metadata.outputs.bin }}-musl ; DPKG_CONFLICTS=${{ needs.metadata.outputs.bin }} ;; esac;
+          DPKG_BASENAME=${{ needs.metadata.outputs.pkg_name }}
+          DPKG_CONFLICTS=${{ needs.metadata.outputs.pkg_name }}-musl
+          case ${{ matrix.job.target }} in
+            *-musl) DPKG_BASENAME=${{ needs.metadata.outputs.pkg_name }}-musl ; DPKG_CONFLICTS=${{ needs.metadata.outputs.pkg_name }} ;;
+          esac;
           DPKG_VERSION=${{ needs.metadata.outputs.version }}
           DPKG_ARCH="${{ matrix.job.dpkg_arch }}"
           DPKG_NAME="${DPKG_BASENAME}_${DPKG_VERSION}_${DPKG_ARCH}.deb"
           echo "DPKG_NAME=${DPKG_NAME}" >> $GITHUB_OUTPUT
 
           # Binary
-          install -Dm755 "${{ steps.bin.outputs.BIN_PATH }}" "${DPKG_DIR}/usr/bin/${{ steps.bin.outputs.BIN_NAME }}"
-
-          # Man page
-          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.bin }}'-*/out/assets/manual/pt.1 "${DPKG_DIR}/usr/share/man/man1/${{ needs.metadata.outputs.bin }}.1"
-          #gzip -n --best "${DPKG_DIR}/usr/share/man/man1/${{ needs.metadata.outputs.name }}.1"
-
-          # Autocompletion files
-          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.bin }}'-*/out/assets/completions/pt.bash "${DPKG_DIR}/usr/share/bash-completion/completions/${{ needs.metadata.outputs.bin }}"
-          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.bin }}'-*/out/assets/completions/pt.fish "${DPKG_DIR}/usr/share/fish/vendor_completions.d/${{ needs.metadata.outputs.bin }}.fish"
-          #install -Dm644 'target/${{ matrix.job.target }}/release/build/${{ needs.metadata.outputs.bin }}'-*/out/assets/completions/pt.zsh "${DPKG_DIR}/usr/share/zsh/vendor-completions/_${{ needs.metadata.outputs.bin }}"
+          for BIN_NAME in $(echo '${{ steps.bin.outputs.bins }}' | jq -r '.[]'); do
+            path=$(echo ${{ steps.bin.outputs.bins }} | jq -r --arg key "BIN_NAME" '.[$key]')
+            install -Dm755 "$path" "${DPKG_DIR}/usr/bin/${BIN_NAME}"
+          done
 
           # README and LICENSE
           install -Dm644 "README.md" "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/README.md"
@@ -383,7 +383,7 @@ jobs:
 
           cat > "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/copyright" <<EOF
           Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-          Upstream-Name: ${{ needs.metadata.outputs.bin }}
+          Upstream-Name: ${{ needs.metadata.outputs.pkg_name }}
           Source: ${{ needs.metadata.outputs.homepage }}
 
           Files: *
@@ -432,7 +432,7 @@ jobs:
           Maintainer: ${{ needs.metadata.outputs.maintainer }}
           Homepage: ${{ needs.metadata.outputs.homepage }}
           Architecture: ${DPKG_ARCH}
-          Provides: ${{ needs.metadata.outputs.bin }}
+          Provides: ${{ needs.metadata.outputs.pkg_name }}
           Conflicts: ${DPKG_CONFLICTS}
           Description: Port tester (pt) provides simple port testing with the feel of ping.
             Used to detect connectivity issues to a specific service.
@@ -458,7 +458,7 @@ jobs:
           path: ${{ steps.debian-package.outputs.DPKG_PATH }}
 
       - name: Publish archives and packages
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         if: needs.metadata.outputs.is_release == 'true'
         with:
           files: |
