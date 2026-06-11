@@ -283,8 +283,16 @@ jobs:
             BIN_PATHS["${BIN_NAME}"]="target/${{ matrix.job.target }}/release/${BIN_NAME}"
           done
 
+          JSON_OUTPUT=$(
+            for key in "${!BIN_PATHS[@]}"; do
+              printf '%s\n' "$key" "${BIN_PATHS[$key]}"
+            done | jq -R -n '
+              [inputs] | . as $in | reduce range(0; length; 2) as $i ({}; . + {($in[$i]): $in[$i+1]})
+            '
+          )
+
           # Let subsequent steps know where to find the binary
-          echo "bin_paths=$(printf '%s\n' "${!BIN_PATHS[@]}" | jq -R . | jq -s .)" >> $GITHUB_OUTPUT
+          echo "bin_paths=${JSON_OUTPUT}" >> $GITHUB_OUTPUT
       - name: Run tests
         shell: bash
         run: |
