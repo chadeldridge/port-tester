@@ -286,7 +286,7 @@ jobs:
           JSON_OUTPUT=$(
             for key in "${!BIN_PATHS[@]}"; do
               printf '%s\n' "$key" "${BIN_PATHS[$key]}"
-            done | jq -R -n '
+            done | jq -R -n -c '
               [inputs] | . as $in | reduce range(0; length; 2) as $i ({}; . + {($in[$i]): $in[$i+1]})
             '
           )
