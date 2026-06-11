@@ -276,20 +276,12 @@ jobs:
             *-pc-windows-*) EXE_suffix=".exe" ;;
           esac;
 
-          declare -A BIN_PATHS
-
-          # Setup paths
-          for bin in $(echo '${{ needs.metadata.outputs.bins }}' | jq -r '.[]'); do
-            BIN_NAME="${bin}${EXE_suffix}"
-            BIN_PATHS["${BIN_NAME}"]="target/${{ matrix.job.target }}/release/${BIN_NAME}"
-          done
-
           JSON_OUTPUT=$(
-            for key in "${!BIN_PATHS[@]}"; do
-              printf '%s\n' "$key" "${BIN_PATHS[$key]}"
-            done | jq -R -n -c '
-              [inputs] | . as $in | reduce range(0; length; 2) as $i ({}; . + {($in[$i]): $in[$i+1]})
-            '
+            for bin in $(echo '${{ needs.metadata.outputs.bins }}' | jq -r '.[]'); do
+              BIN_NAME="${bin}${EXE_suffix}"
+              BIN_PATH="target/${{ matrix.job.target }}/release/${BIN_NAME}"
+              printf '%s\n' "$BIN_NAME" "$BIN_PATHS"
+            done | jq -R -n -c '[inputs] | . as $in | reduce range(0; length; 2) as $i ({}; . + {($in[$i]): $in[$i+1]})'
           )
 
           # Let subsequent steps know where to find the binary
