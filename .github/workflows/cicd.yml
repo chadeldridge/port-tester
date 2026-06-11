@@ -52,6 +52,7 @@ jobs:
           echo "is_release=${IS_RELEASE}" | tee -a $GITHUB_OUTPUT
     outputs:
       name: ${{ steps.metadata.outputs.name }}
+      pkg_name: "port-tester"
       version: ${{ steps.metadata.outputs.version }}
       maintainer: ${{ steps.metadata.outputs.maintainer }}
       homepage: ${{ steps.metadata.outputs.homepage }}
@@ -328,7 +329,7 @@ jobs:
         shell: bash
         run: |
           PKG_suffix=".tar.gz" ; case ${{ matrix.job.target }} in *-pc-windows-*) PKG_suffix=".zip" ;; esac;
-          PKG_BASENAME=${{ needs.metadata.outputs.name }}-v${{ needs.metadata.outputs.version }}-${{ matrix.job.target }}
+          PKG_BASENAME=${{ needs.metadata.outputs.pkg_name }}-v${{ needs.metadata.outputs.version }}-${{ matrix.job.target }}
           PKG_NAME=${PKG_BASENAME}${PKG_suffix}
           echo "PKG_NAME=${PKG_NAME}" >> $GITHUB_OUTPUT
 
@@ -365,10 +366,10 @@ jobs:
           DPKG_DIR="${DPKG_STAGING}/dpkg"
           mkdir -p "${DPKG_DIR}"
 
-          DPKG_BASENAME=${{ needs.metadata.outputs.name }}
-          DPKG_CONFLICTS=${{ needs.metadata.outputs.name }}-musl
+          DPKG_BASENAME=${{ needs.metadata.outputs.pkg_name }}
+          DPKG_CONFLICTS=${{ needs.metadata.outputs.pkg_name }}-musl
           case ${{ matrix.job.target }} in
-            *-musl) DPKG_BASENAME=${{ needs.metadata.outputs.name }}-musl ; DPKG_CONFLICTS=${{ needs.metadata.outputs.name }} ;;
+            *-musl) DPKG_BASENAME=${{ needs.metadata.outputs.pkg_name }}-musl ; DPKG_CONFLICTS=${{ needs.metadata.outputs.pkg_name }} ;;
           esac;
           DPKG_VERSION=${{ needs.metadata.outputs.version }}
           DPKG_ARCH="${{ matrix.job.dpkg_arch }}"
@@ -390,7 +391,7 @@ jobs:
 
           cat > "${DPKG_DIR}/usr/share/doc/${DPKG_BASENAME}/copyright" <<EOF
           Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-          Upstream-Name: ${{ needs.metadata.outputs.name }}
+          Upstream-Name: ${{ needs.metadata.outputs.pkg_name }}
           Source: ${{ needs.metadata.outputs.homepage }}
 
           Files: *
@@ -439,7 +440,7 @@ jobs:
           Maintainer: ${{ needs.metadata.outputs.maintainer }}
           Homepage: ${{ needs.metadata.outputs.homepage }}
           Architecture: ${DPKG_ARCH}
-          Provides: ${{ needs.metadata.outputs.name }}
+          Provides: ${{ needs.metadata.outputs.pkg_name }}
           Conflicts: ${DPKG_CONFLICTS}
           Description: Port tester (pt) provides simple port testing with the feel of ping.
             Used to detect connectivity issues to a specific service.
