@@ -2,7 +2,12 @@
 
 See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
 
-## unreleased
+## [Unreleased]
+### Security
+### Fixed
+  - Fixed broken intra-doc links in `Metrics` documentation. #7 (@chadeldridge)
+  - Fixed terminology inconsistencies in documentation and help text. #7 (@chadeldridge)
+  - Standardized `chrono` duration types and formatting in metrics tests. #7 (@chadeldridge)
 ### Added
   - Added cargo release process and documentation. #11 (@chadeldridge)
   - Added Issues and Pull Request templates. #10 (@chadeldridge)
@@ -40,12 +45,15 @@ See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
 ### Removed
   - Removed unused is_err field in `MetricsResultJSON`. #6 (@chadeldridge)
   - Removed `Arc<Mutex<>>` requirements for core::metrics::Metrics. #5 (@chadeldridge)
-### Fixed
-  - Fixed broken intra-doc links in `Metrics` documentation. #7 (@chadeldridge)
-  - Fixed terminology inconsistencies in documentation and help text. #7 (@chadeldridge)
-  - Standardized `chrono` duration types and formatting in metrics tests. #7 (@chadeldridge)
-### Security
 
-## v0.1.0 (2026-02-01)
+## [v0.1.0] - 2026-02-01
+### Security
+### Fixed
 ### Added
   - Added base functionality of port open testing, metrics summary, and incremental summaries. #1 (@chadeldridge)
+### Changed
+### Deprecated
+### Removed
+
+[Unreleased]: https://github.com/chadeldridge/port-tester/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/chadeldridge/port-tester/compare/f30cf8c...v0.1.0
