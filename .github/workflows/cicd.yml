@@ -124,7 +124,7 @@ jobs:
       - name: Git Checkout
         uses: actions/checkout@v6
       - name: Spell Check Repo
-        uses: crate-ci/typos@v1.47.0
+        uses: crate-ci/typos@v1.47.2
   msrv:
     runs-on: ubuntu-latest
     steps:
