@@ -1,0 +1,43 @@
+# cargo-release configuration
+# https://github.com/crate-ci/cargo-release/blob/master/docs/reference.md
+
+# CI handles publishing to crates.io after all quality gates pass
+publish = false
+
+# Match the tag pattern expected by cicd.yml
+tag-name = "v{{version}}"
+
+# Run the full local check suite before cargo-release makes any changes
+pre-release-hook = ["bash", "scripts/pre-release.sh"]
+
+# Convert raw "#N (@user)" changelog references to markdown links before the
+# release commit is made, eliminating the race with the convert-pr-links CI job.
+[[pre-release-replacements]]
+file    = "CHANGELOG.md"
+search  = "#([0-9]+)\\s+\\(@([^)]+)\\)"
+replace = "[#${1}](https://github.com/chadeldridge/port-tester/pull/${1}) (@${2})"
+
+# Promote ## [Unreleased] to the release version and insert a fresh unreleased
+# section above it with the standard empty category skeleton.
+[[pre-release-replacements]]
+file    = "CHANGELOG.md"
+search  = "## \\[Unreleased\\]"
+replace = """## [Unreleased]
+### Security
+### Fixed
+### Added
+### Changed
+### Deprecated
+### Removed
+
+## [{{version}}] - {{date}}"""
+exactly = 1
+
+# Update the [Unreleased] comparison link and insert a new versioned link.
+# The seed uses the initial commit hash so the first release produces a valid
+# compare URL (all commits to v0.1.0). Subsequent releases produce vOLD...vNEW.
+[[pre-release-replacements]]
+file    = "CHANGELOG.md"
+search  = "\\[Unreleased\\]: https://github\\.com/chadeldridge/port-tester/compare/(.+)\\.\\.\\.HEAD"
+replace = "[Unreleased]: https://github.com/chadeldridge/port-tester/compare/v{{version}}...HEAD\n[{{version}}]: https://github.com/chadeldridge/port-tester/compare/${1}...v{{version}}"
+exactly = 1

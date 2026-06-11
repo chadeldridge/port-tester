@@ -4,6 +4,7 @@ See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
 
 ## unreleased
 ### Added
+  - Added cargo release process and documentation. #11 (@chadeldridge)
   - Added Issues and Pull Request templates. #10 (@chadeldridge)
   - Added poke executable. Poke always performs a single TCP connection attempt. #8 (@chadeldridge)
   - Added dependabot to automate dependency updates. #8 (@chadeldridge)
