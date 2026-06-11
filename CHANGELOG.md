@@ -20,6 +20,7 @@ See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
   - Added Status to record the Success or Failure of a connection attempt. #4 (@chadeldridge)
   - Added basic testing in all modules and the binary. #3 (@chadeldridge)
 ### Changed
+  - Updated dependency crates: typos #9 (dependabot)
   - Updated dependencies crates. chrono, clap, ctrlc, env_logger, log, serde_json #8 (@chadeldridge)
   - `scripts/pre-release.sh` now runs `scripts/qa.sh` as a required check. #8 (@chadeldridge)
   - Refactored CICD GitHub Actions workflow to include poke. #8 (@chadeldridge)
