@@ -1,0 +1,73 @@
+name: Bug Report
+description: Something isn't working correctly.
+labels: ["bug"]
+body:
+  - type: checkboxes
+    attributes:
+      label: Pre-flight checklist
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I am using the latest released version of vsleep.
+          required: true
+
+  - type: input
+    attributes:
+      label: vsleep version
+      description: Run `vsleep --version`
+      placeholder: "vsleep 0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: Rust version
+      description: Run `rustc --version`
+      placeholder: "rustc 1.87.0 (05f9846f8 2025-03-31)"
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: Operating system
+      placeholder: "Ubuntu 24.04 / macOS 15.2 / Windows 11"
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: Installation method
+      placeholder: "cargo install / GitHub release / built from source"
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands run, in order.
+      placeholder: |
+        1. Run `vsleep -v 10`
+        2. ...
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Actual behavior
+      description: What happened instead? Include any error output.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Additional context
+      description: Anything else that might be relevant — screenshots, terminal output, etc.
+    validations:
+      required: false

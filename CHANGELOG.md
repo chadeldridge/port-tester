@@ -4,6 +4,7 @@ See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
 
 ## unreleased
 ### Added
+  - Added Issues and Pull Request templates. #10 (@chadeldridge)
   - Added poke executable. Poke always performs a single TCP connection attempt. #8 (@chadeldridge)
   - Added dependabot to automate dependency updates. #8 (@chadeldridge)
   - Added support for testing multiple resolved IP addresses in sequence. #7 (@chadeldridge)
@@ -20,6 +21,7 @@ See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
   - Added Status to record the Success or Failure of a connection attempt. #4 (@chadeldridge)
   - Added basic testing in all modules and the binary. #3 (@chadeldridge)
 ### Changed
+  - Updated Contributing guidelines. #10 (@chadeldridge)
   - Updated dependency crates: typos #9 (dependabot)
   - Updated dependencies crates. chrono, clap, ctrlc, env_logger, log, serde_json #8 (@chadeldridge)
   - `scripts/pre-release.sh` now runs `scripts/qa.sh` as a required check. #8 (@chadeldridge)

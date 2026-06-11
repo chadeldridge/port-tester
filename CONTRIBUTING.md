@@ -13,6 +13,16 @@ Branch names should start with the branch type and include related issues in the
   - `feature/issue-142/add-http-support`
   - `test/refactor-core-io-read-file`
 
+## Minimum Supported Rust Version (MSRV)
+
+The current MSRV is declared in `Cargo.toml` as `rust-version` and enforced in CI via `cargo-hack`.
+
+**Policy:** the MSRV tracks the N-2 stable Rust release — support is dropped for a version only after two newer stable releases have shipped. For example, when Rust 1.87 is stable, the minimum supported version is 1.85.
+
+**When it changes:** the MSRV may only be raised in a **minor** release (`0.x.0`), never in a patch release. Breaking MSRV in a patch would violate SemVer expectations for users pinning to an older toolchain. PRs that require a newer Rust version than the current MSRV will not be accepted unless the bump is intentional and versioned accordingly.
+
+The MSRV is re-detected automatically before each release by `cargo msrv find --write-msrv` in the pre-release script.
+
 ## Changelog
 
 Add a changelog entry to CHANGELOG.md under the appropriate category.
