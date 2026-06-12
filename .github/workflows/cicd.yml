@@ -331,7 +331,7 @@ jobs:
           mkdir -p "${ARCHIVE_DIR}/autocomplete"
 
           # Binaries
-          echo '${{ steps.bin.outputs.bin_paths }}' | jq -r '.[]' | xargs -I {} cp "{}" "$ARCHIVE_DIR"
+          echo '${{ steps.bin.outputs.bin_paths }}' | tr -d '\r' | jq -r '.[]' | xargs -I {} cp "{}" "$ARCHIVE_DIR"
 
           # README, LICENSE and CHANGELOG files
           cp "README.md" "LICENSE-MIT" "LICENSE-APACHE" "CHANGELOG.md" "$ARCHIVE_DIR"
