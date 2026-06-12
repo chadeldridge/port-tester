@@ -280,7 +280,7 @@ jobs:
             for bin in $(echo '${{ needs.metadata.outputs.bins }}' | jq -r '.[]'); do
               BIN_NAME="${bin}${EXE_suffix}"
               BIN_PATH="target/${{ matrix.job.target }}/release/${BIN_NAME}"
-              printf '%s\n' "$BIN_NAME" "$BIN_PATHS"
+              printf '%s\n' "$BIN_NAME" "$BIN_PATH"
             done | jq -R -n -c '[inputs] | . as $in | reduce range(0; length; 2) as $i ({}; . + {($in[$i]): $in[$i+1]})'
           )
 
@@ -331,7 +331,7 @@ jobs:
           mkdir -p "${ARCHIVE_DIR}/autocomplete"
 
           # Binaries
-          echo "${{ steps.bin.outputs.bins }}" | jq -r '.[]' | xargs -I {} cp "{}" "$ARCHIVE_DIR"
+          echo "${{ steps.bin.outputs.bin_paths }}" | jq -r '.[]' | xargs -I {} cp "{}" "$ARCHIVE_DIR"
 
           # README, LICENSE and CHANGELOG files
           cp "README.md" "LICENSE-MIT" "LICENSE-APACHE" "CHANGELOG.md" "$ARCHIVE_DIR"
