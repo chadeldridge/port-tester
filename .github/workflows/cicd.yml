@@ -333,7 +333,7 @@ jobs:
 
           # Binaries
           # FIX: tr -d '\r' is needed to remove carriage return characters on Windows
-          echo '${{ steps.bin.outputs.bins }}' | tr -d '\r' | jq -r '.[]' | tr -d '\r' | while read -r file; do
+          echo '${{ steps.bin.outputs.bin_paths }}' | tr -d '\r' | jq -r '.[]' | tr -d '\r' | while read -r file; do
             if [ -n "$file" ]; then
               cp "$file" "$ARCHIVE_DIR"
             fi
