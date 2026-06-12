@@ -281,7 +281,8 @@ jobs:
               BIN_NAME="${bin}${EXE_suffix}"
               BIN_PATH="target/${{ matrix.job.target }}/release/${BIN_NAME}"
               printf '%s\n' "$BIN_NAME" "$BIN_PATH"
-            done | jq -R -n -c '[inputs] | . as $in | reduce range(0; length; 2) as $i ({}; . + {($in[$i]): $in[$i+1]})'
+            # FIX: tr -d '\r' is needed to remove carriage return characters on Windows
+            done | tr -d '\r' | jq -R -n -c '[inputs] | . as $in | reduce range(0; length; 2) as $i ({}; . + {($in[$i]): $in[$i+1]})'
           )
 
           # Let subsequent steps know where to find the binary
@@ -331,7 +332,12 @@ jobs:
           mkdir -p "${ARCHIVE_DIR}/autocomplete"
 
           # Binaries
-          echo '${{ steps.bin.outputs.bin_paths }}' | tr -d '\r' | jq -r '.[]' | xargs -I {} cp "{}" "$ARCHIVE_DIR"
+          # FIX: tr -d '\r' is needed to remove carriage return characters on Windows
+          echo '${{ steps.bin.outputs.bins }}' | tr -d '\r' | jq -r '.[]' | tr -d '\r' | while read -r file; do
+            if [ -n "$file" ]; then
+              cp "$file" "$ARCHIVE_DIR"
+            fi
+          done
 
           # README, LICENSE and CHANGELOG files
           cp "README.md" "LICENSE-MIT" "LICENSE-APACHE" "CHANGELOG.md" "$ARCHIVE_DIR"
