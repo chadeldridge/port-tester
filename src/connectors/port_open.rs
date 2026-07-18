@@ -42,6 +42,10 @@ mod test {
     use super::*;
 
     #[test]
+    #[cfg_attr(
+        not(feature = "network-tests"),
+        ignore = "requires network; enable with --features network-tests"
+    )]
     fn test_connect_success() {
         let r = Host::new("8.8.8.8", 443);
         assert!(r.is_ok());

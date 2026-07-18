@@ -1,7 +1,7 @@
-use hostname_validator::is_valid as is_valid_hostname;
 use log::debug;
+use port_tester::Target;
 use port_tester::Verbosity;
-use std::net::IpAddr;
+use port_tester::connectors::http::{HttpConfig, HttpSuccess};
 
 use clap::{ArgAction, CommandFactory, Parser, value_parser};
 
@@ -33,13 +33,31 @@ fn _count_true(vec: std::vec::Vec<bool>) -> usize {
 pub struct Args {
     // Positional Arguments
     /// Target host to connect to.
-    #[arg(value_parser = validate_host)]
+    /// May be a bare hostname/IP or a URL including a scheme, port, and path
+    /// (e.g. `https://example.com:8443/health`).
     pub host: String,
     /// Port number to connect to.
-    #[arg(value_parser = value_parser!(u16).range(1..), default_value_t = DEFAULT_PORT)]
-    pub port: u16,
+    /// Defaults to a port derived from the scheme (80/443) for HTTP tests, else 443.
+    #[arg(value_parser = value_parser!(u16).range(1..))]
+    pub port: Option<u16>,
 
     // Options
+    /// Perform an HTTP GET test instead of a plain port-open test.
+    #[arg(long, default_value_t = false)]
+    pub http: bool,
+    /// Additional HTTP status code to accept as success. May be repeated.
+    #[arg(long = "http-code", value_parser = value_parser!(u16).range(100..=599))]
+    pub http_code: Vec<u16>,
+    /// Restrict HTTP success to 2xx/3xx responses.
+    #[arg(long, default_value_t = false)]
+    pub http_success: bool,
+    /// Perform an HTTP GET test over HTTPS regardless of port, scheme, or other indicators.
+    #[arg(long, default_value_t = false)]
+    pub https: bool,
+    /// Allow insecure HTTPS: skip TLS certificate verification (expired/invalid certs,
+    /// hostname mismatch when testing an IP, etc.). Like curl's --insecure.
+    #[arg(short = 'k', long, default_value_t = false)]
+    pub insecure: bool,
     /// Quiet mode.
     /// Suppress per-attempt output and attempt errors only showing sequence numbers and each result
     /// as 'ok' or 'fail'.
@@ -75,10 +93,16 @@ impl Args {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug)]
 pub struct Cli {
     pub args: Args,
     pub verbose: Option<Verbosity>,
+    /// Bare host (hostname or IP) parsed from `args.host`.
+    pub host: String,
+    /// Resolved port to connect to.
+    pub port: u16,
+    /// HTTP test configuration, or [`None`] for a plain port-open test.
+    pub http: Option<HttpConfig>,
 }
 
 impl Cli {
@@ -87,6 +111,9 @@ impl Cli {
         let mut c = Cli {
             args,
             verbose: None,
+            host: String::new(),
+            port: DEFAULT_PORT,
+            http: None,
         };
 
         let is_verbose = !matches!(&c.args.verbose, 0);
@@ -96,6 +123,41 @@ impl Cli {
             eprintln!("You may only specify one of: --quiet, --silent, --verbose");
             let _ = Args::command().print_help();
             std::process::exit(3);
+        }
+
+        // Parse the host argument into its scheme, host, port, and path components.
+        let target = match Target::parse(&c.args.host) {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(e.code().unwrap_or(3));
+            }
+        };
+
+        // HTTP mode is on when requested by flag or implied by an explicit scheme prefix.
+        let http_mode = c.args.http || c.args.https || target.scheme().is_some();
+
+        // HTTP-only flags require an HTTP test.
+        if !http_mode && (c.args.http_success || !c.args.http_code.is_empty() || c.args.insecure) {
+            eprintln!("--http-success, --http-code, and --insecure require --http or --https");
+            let _ = Args::command().print_help();
+            std::process::exit(3);
+        }
+
+        c.host = target.host().to_string();
+
+        if http_mode {
+            let scheme = target.resolve_scheme(c.args.https, c.args.port);
+            c.port = target.resolve_port(scheme, c.args.port);
+            c.http = Some(HttpConfig {
+                scheme,
+                path: target.path().to_string(),
+                success: HttpSuccess::from_flags(c.args.http_success, &c.args.http_code),
+                timeout: c.args.timeout,
+                insecure: c.args.insecure,
+            });
+        } else {
+            c.port = target.port().or(c.args.port).unwrap_or(DEFAULT_PORT);
         }
 
         // Set verbosity so we know how much to print.
@@ -120,19 +182,10 @@ impl Cli {
     }
 }
 
-fn validate_host(host: &str) -> Result<String, String> {
-    if host.trim().is_empty() {
-        Err(String::from("Host cannot be empty"))
-    } else if host.parse::<IpAddr>().is_ok() || is_valid_hostname(host) {
-        Ok(host.to_string())
-    } else {
-        Err(String::from("Invalid host format"))
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
+    use port_tester::Scheme;
 
     #[test]
     fn test_count_true() {
@@ -147,54 +200,109 @@ mod test {
     }
 
     #[test]
-    fn test_validate_host() {
-        let empty = "";
-        let hostname = "example.com";
-        let ip = "1.1.1.1";
-        let invalid = "-a.com";
-
-        assert!(validate_host(empty).is_err());
-        assert!(validate_host(hostname).is_ok());
-        assert!(validate_host(ip).is_ok());
-        assert!(validate_host(invalid).is_err());
-    }
-
-    #[test]
     fn test_cli_new() {
-        let mut args = Args::try_parse_from(vec!["pt", "1.1.1.1"]);
+        let mut args = Args::try_parse_from(vec!["poke", "1.1.1.1"]);
         assert!(args.is_ok());
         let mut cli = Cli::new(args.unwrap());
         assert_eq!(cli.args.host, "1.1.1.1".to_string());
+        assert_eq!(cli.host, "1.1.1.1".to_string());
 
-        args = Args::try_parse_from(vec!["pt", "1.1.1.1", "--silent"]);
+        args = Args::try_parse_from(vec!["poke", "1.1.1.1", "--silent"]);
         assert!(args.is_ok());
         cli = Cli::new(args.unwrap());
         assert_eq!(cli.verbose.unwrap(), Verbosity::Silent);
+    }
+
+    #[test]
+    fn test_default_port_open_mode() {
+        let cli = Cli::new(Args::try_parse_from(vec!["poke", "google.com"]).unwrap());
+        assert!(cli.http.is_none());
+        assert_eq!(cli.host, "google.com");
+        assert_eq!(cli.port, 443);
+    }
+
+    #[test]
+    fn test_http_flag_defaults_http_scheme() {
+        let cli = Cli::new(Args::try_parse_from(vec!["poke", "--http", "google.com"]).unwrap());
+        let cfg = cli.http.expect("http mode");
+        assert_eq!(cfg.scheme, Scheme::Http);
+        assert_eq!(cli.port, 80);
+        assert_eq!(cfg.path, "/");
+        assert_eq!(cfg.success, HttpSuccess::Any);
+    }
+
+    #[test]
+    fn test_https_flag_forces_tls() {
+        let cli = Cli::new(Args::try_parse_from(vec!["poke", "--https", "google.com"]).unwrap());
+        let cfg = cli.http.expect("http mode");
+        assert_eq!(cfg.scheme, Scheme::Https);
+        assert_eq!(cli.port, 443);
+    }
+
+    #[test]
+    fn test_scheme_prefix_enables_http() {
+        let cli =
+            Cli::new(Args::try_parse_from(vec!["poke", "https://google.com/health"]).unwrap());
+        let cfg = cli.http.expect("http mode");
+        assert_eq!(cfg.scheme, Scheme::Https);
+        assert_eq!(cli.host, "google.com");
+        assert_eq!(cfg.path, "/health");
+        assert_eq!(cli.port, 443);
+    }
+
+    #[test]
+    fn test_http_success_policy() {
+        let cli = Cli::new(
+            Args::try_parse_from(vec![
+                "poke",
+                "--http",
+                "--http-success",
+                "--http-code",
+                "418",
+                "google.com",
+            ])
+            .unwrap(),
+        );
+        let cfg = cli.http.expect("http mode");
+        assert!(cfg.success.accepts(200));
+        assert!(cfg.success.accepts(418));
+        assert!(!cfg.success.accepts(500));
+    }
+
+    #[test]
+    fn test_insecure_flag() {
+        let cli = Cli::new(Args::try_parse_from(vec!["poke", "--https", "-k", "1.1.1.1"]).unwrap());
+        let cfg = cli.http.expect("http mode");
+        assert!(cfg.insecure);
+
+        // Without --insecure it defaults to secure.
+        let cli = Cli::new(Args::try_parse_from(vec!["poke", "--https", "google.com"]).unwrap());
+        assert!(!cli.http.expect("http mode").insecure);
     }
 
     #[test]
     fn test_verbosity() {
-        let mut args = Args::try_parse_from(vec!["pt", "1.1.1.1"]);
+        let mut args = Args::try_parse_from(vec!["poke", "1.1.1.1"]);
         assert!(args.is_ok());
         let mut cli = Cli::new(args.unwrap());
         assert_eq!(cli.verbose, None);
 
-        args = Args::try_parse_from(vec!["pt", "1.1.1.1", "--silent"]);
+        args = Args::try_parse_from(vec!["poke", "1.1.1.1", "--silent"]);
         assert!(args.is_ok());
         cli = Cli::new(args.unwrap());
         assert_eq!(cli.verbose.unwrap(), Verbosity::Silent);
 
-        args = Args::try_parse_from(vec!["pt", "1.1.1.1", "--quiet"]);
+        args = Args::try_parse_from(vec!["poke", "1.1.1.1", "--quiet"]);
         assert!(args.is_ok());
         cli = Cli::new(args.unwrap());
         assert_eq!(cli.verbose.unwrap(), Verbosity::Quiet);
 
-        args = Args::try_parse_from(vec!["pt", "1.1.1.1", "-v"]);
+        args = Args::try_parse_from(vec!["poke", "1.1.1.1", "-v"]);
         assert!(args.is_ok());
         cli = Cli::new(args.unwrap());
         assert_eq!(cli.verbose.unwrap(), Verbosity::Verbose(1));
 
-        args = Args::try_parse_from(vec!["pt", "1.1.1.1", "-vvv"]);
+        args = Args::try_parse_from(vec!["poke", "1.1.1.1", "-vvv"]);
         assert!(args.is_ok());
         cli = Cli::new(args.unwrap());
         assert_eq!(cli.verbose.unwrap(), Verbosity::Verbose(3));

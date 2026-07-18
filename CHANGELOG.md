@@ -6,9 +6,21 @@ See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
 ### Security
 ### Fixed
 ### Added
+  - Added an HTTP GET test mode with `--http` and `--https` flags to both `pt` and `poke`. [#16](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
+  - Added URL parsing of the host argument, splitting out the scheme, port, and path. [#16](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
+  - Added `--http-success` and repeatable `--http-code` flags to control which HTTP status codes count as success. [#16](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
+  - Added `-k`/`--insecure` flag to skip TLS certificate verification for HTTP tests. [#16](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
+  - Added the `connectors::http` connector and the `core::target` (`Target`, `Scheme`) parser. [#16](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
+  - Added CLI integration tests (`tests/cli.rs`) with `assert_cmd`/`predicates`, including `--help` regression snapshots and coverage of the argument-validation error paths. [#16](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
+  - Added a `network-tests` cargo feature to opt in to tests that require live network access. [#16](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
 ### Changed
+  - Made the `port` argument optional so the scheme determines the default port (80/443) for HTTP tests. [#16](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
+  - Enabled unit tests for the `pt` and `poke` binaries. [#16](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
+  - Gated network-dependent tests behind the `network-tests` feature so the default `cargo test` is hermetic; CI and `pre-release.sh` now run a hermetic pass plus a separate networked pass. [#16](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
+  - Allowed the permissive licenses (`BSD-3-Clause`, `ISC`, `CDLA-Permissive-2.0`) required by the `ureq` TLS stack in `deny.toml`. [#16](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
 ### Deprecated
 ### Removed
+  - Removed `scripts/qa.sh`; its functional coverage moved into the `tests/cli.rs` integration suite. [#16](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
 
 ## [0.2.0] - 2026-06-12
 ### Security

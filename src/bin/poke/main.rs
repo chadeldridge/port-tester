@@ -1,5 +1,5 @@
 use cli::{Args, Cli};
-use port_tester::connectors::port_open::*;
+use port_tester::connectors::{http, port_open};
 use port_tester::core::error::*;
 use port_tester::{Host, Verbosity};
 
@@ -26,7 +26,7 @@ fn main() {
         std::process::exit(1);
     }
 
-    let mut host = match Host::new(&cli.args.host, cli.args.port) {
+    let mut host = match Host::new(&cli.host, cli.port) {
         Ok(h) => h,
         Err(e) => exit_handler(&e),
     };
@@ -47,7 +47,10 @@ fn main() {
     );
 
     // Connect to the target and record metrics.
-    connect(1, &mut host, cli.args.timeout);
+    match &cli.http {
+        Some(cfg) => http::connect(1, &mut host, cfg),
+        None => port_open::connect(1, &mut host, cli.args.timeout),
+    }
 
     let status = host.metrics().result(1).unwrap().status();
     if !cli.args.silent {

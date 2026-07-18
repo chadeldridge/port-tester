@@ -14,9 +14,13 @@ ignore = []
 allow = [
     "Apache-2.0",
 #    "BSD-2-Clause",
-#    "BSD-3-Clause",
+    # subtle (via the rustls TLS stack, pulled in by ureq).
+    "BSD-3-Clause",
 #    "CC0-1.0",
-#    "ISC",
+    # webpki-roots (Mozilla CA bundle, via ureq) ships its root data under CDLA-Permissive-2.0.
+    "CDLA-Permissive-2.0",
+    # rustls-webpki, ring, untrusted (the rustls TLS stack, pulled in by ureq).
+    "ISC",
     "MIT",
 #    "MIT-0",
 #    "MPL-2.0",

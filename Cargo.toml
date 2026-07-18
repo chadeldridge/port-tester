@@ -16,18 +16,20 @@ rust-version = "1.85"
 name = "pt"
 path = "src/bin/pt/main.rs"
 required-features = ["serde"]
-test = false
 doc = true
 
 [[bin]]
 name = "poke"
 path = "src/bin/poke/main.rs"
-test = false
 doc = true
 
 [features]
 default = ["serde"]
 serde = ["dep:serde", "dep:serde_json"]
+# Opt-in tests that require live network access (DNS, outbound TCP/TLS to public hosts).
+# Off by default so `cargo test` stays hermetic and offline-friendly. Enable with
+# `cargo test --features network-tests` (or run all ignored tests with `-- --ignored`).
+network-tests = []
 
 [dependencies]
 chrono = "0.4.45"
@@ -40,3 +42,8 @@ log = "0.4.32"
 serde = { version = "1.0.228", features = ["derive"], optional = true }
 serde_json = { version = "1.0.150", optional = true }
 thiserror = "2.0.18"
+ureq = "3.3.0"
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"

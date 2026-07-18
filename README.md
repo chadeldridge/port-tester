@@ -12,12 +12,22 @@ Release packages can be found [here](https://github.com/chadeldridge/port-tester
 Usage: pt [OPTIONS] <HOST> [PORT]
 
 Arguments:
-  <HOST>  Target host to connect to
-  [PORT]  Port number to connect to [default: 443]
+  <HOST>  Target host to connect to. May be a bare hostname/IP or a URL including a scheme, port, and path (e.g. https://example.com:8443/health)
+  [PORT]  Port number to connect to. Defaults to a port derived from the scheme (80/443) for HTTP tests, else 443
 
 Options:
   -c, --count <COUNT>
           Count of connection attempts to perform. 0 for infinite [default: 0]
+      --http
+          Perform an HTTP GET test instead of a plain port-open test
+      --http-code <HTTP_CODE>
+          Additional HTTP status code to accept as success. May be repeated
+      --http-success
+          Restrict HTTP success to 2xx/3xx responses
+      --https
+          Perform an HTTP GET test over HTTPS regardless of port, scheme, or other indicators
+  -k, --insecure
+          Allow insecure HTTPS: skip TLS certificate verification (expired/invalid certs, hostname mismatch when testing an IP, etc.). Like curl's --insecure
   -i, --interval <INTERVAL>
           Interval between attempts in seconds [default: 1]
       --json
@@ -93,6 +103,45 @@ For single attempts with silent (-s), pt will return a success (0) or error (1) 
 1
 ❯ pt -c 1 -s 8.8.8.8 80; echo $? && echo "do one thing" || echo "do another thing"
 do another thing
+```
+
+## HTTP tests
+Pass `--http` to issue an HTTP `GET` instead of only checking that the port opens. The
+scheme is chosen from the URL prefix, the port, or other indicators, defaulting to plain
+HTTP; use `--https` to force TLS. A scheme prefix on the host enables HTTP mode on its own.
+
+```
+❯ pt --http -c 1 google.com; echo $?
+ok
+0
+❯ pt -c 1 https://google.com/; echo $?
+ok
+0
+```
+
+Pass `-k`/`--insecure` to skip TLS certificate verification, allowing a test to succeed
+despite an expired, self-signed, or hostname-mismatched certificate (for example when
+testing an IP directly over HTTPS). Like curl's `--insecure`.
+
+```
+❯ pt --https -c 1 expired.badssl.com; echo $?
+fail: io: invalid peer certificate: certificate expired: ...
+1
+❯ pt --https -k -c 1 expired.badssl.com; echo $?
+ok
+0
+```
+
+By default any completed HTTP response counts as success. Use `--http-success` to require a
+2xx/3xx response, and `--http-code` (repeatable) to accept additional status codes.
+
+```
+❯ pt --http --http-success -c 1 google.com; echo $?
+ok
+0
+❯ pt --http --http-code 418 --http-code 200 -c 1 google.com; echo $?
+ok
+0
 ```
 
 ## Contributing

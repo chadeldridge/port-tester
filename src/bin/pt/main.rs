@@ -1,5 +1,5 @@
 use cli::{Args, Cli};
-use port_tester::connectors::port_open::*;
+use port_tester::connectors::{http, port_open};
 use port_tester::core::error::*;
 use port_tester::{Host, Verbosity};
 
@@ -29,7 +29,7 @@ fn main() {
 
     // Set up Ctrl-C handler to print report on interrupt. We need to create the host object first
     // so we can access its metrics in the handler.
-    let host = Arc::new(Mutex::new(match Host::new(&cli.args.host, cli.args.port) {
+    let host = Arc::new(Mutex::new(match Host::new(&cli.host, cli.port) {
         Ok(h) => h,
         Err(e) => exit_handler(&e),
     }));
@@ -67,7 +67,10 @@ fn main() {
         );
 
         // Connect to the target and record metrics.
-        connect(i, &mut host.lock().unwrap(), cli.args.timeout);
+        match &cli.http {
+            Some(cfg) => http::connect(i, &mut host.lock().unwrap(), cfg),
+            None => port_open::connect(i, &mut host.lock().unwrap(), cli.args.timeout),
+        }
 
         // Use a block so the MutexGuard is dropped before the intermediate report and sleep,
         // otherwise those sites deadlock trying to re-acquire the same lock.
