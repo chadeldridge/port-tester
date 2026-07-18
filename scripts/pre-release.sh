@@ -24,18 +24,15 @@ fi
 echo "update --locked..."
 cargo update -p port_tester --locked
 
-# Run test jobs.
+# Run the hermetic (offline) test suite: unit, doc, and CLI integration tests.
 echo "test --locked --release..."
 cargo test --locked --release
 
-# Binary build and run.
+# Run the network-dependent tests (DNS, outbound TCP/TLS). These exercise real
+# connections through the pt/poke binaries and the http/port_open connectors.
 echo
-#echo "cargo run -- 8.8.8.8 -c 1 -s"
-#cargo run --locked -- 8.8.8.8 -c 1 -s
-#echo "cargo run -- -v 8.8.8.8 53 -c 1"
-#cargo run --locked -- -v 8.8.8.8 53 -c 1
-# Run our QA tests to make sure everything is working as expected.
-./scripts/qa.sh
+echo "test --locked --release --features network-tests..."
+cargo test --locked --release --features network-tests
 
 echo "documentation check..."
 # Ensure no documentation warnings exist.

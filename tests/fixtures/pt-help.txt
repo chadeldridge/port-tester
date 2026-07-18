@@ -1,0 +1,39 @@
+A command line tool to test open ports.
+
+Usage: pt [OPTIONS] <HOST> [PORT]
+
+Arguments:
+  <HOST>  Target host to connect to. May be a bare hostname/IP or a URL including a scheme, port, and path (e.g. `https://example.com:8443/health`)
+  [PORT]  Port number to connect to. Defaults to a port derived from the scheme (80/443) for HTTP tests, else 443
+
+Options:
+  -c, --count <COUNT>
+          Count of connection attempts to perform. 0 for infinite [default: 0]
+      --http
+          Perform an HTTP GET test instead of a plain port-open test
+      --http-code <HTTP_CODE>
+          Additional HTTP status code to accept as success. May be repeated
+      --http-success
+          Restrict HTTP success to 2xx/3xx responses
+      --https
+          Perform an HTTP GET test over HTTPS regardless of port, scheme, or other indicators
+  -k, --insecure
+          Allow insecure HTTPS: skip TLS certificate verification (expired/invalid certs, hostname mismatch when testing an IP, etc.). Like curl's --insecure
+  -i, --interval <INTERVAL>
+          Interval between attempts in seconds [default: 1]
+      --json
+          Produce all output in JSON on exit. Output is held until all tests are complete
+  -q, --quiet
+          Quiet mode. Suppress per-attempt output and attempt errors only showing sequence numbers and each result as 'ok' or 'fail'
+  -r, --report-interval <REPORT_INTERVAL>
+          Interval to output intermediate reports. Default is 0 (no intermediate reports). If set to N, a report will be printed every N attempts [default: 0]
+  -s, --silent
+          Silent mode. Suppress output except for errors and final report
+  -t, --timeout <TIMEOUT>
+          Connection attempt timeout in seconds [default: 5]
+  -v, --verbose...
+          Verbosity level. Defaults to 1. 1 = warnings 2 = debug 3 = trace
+  -h, --help
+          Print help
+  -V, --version
+          Print version

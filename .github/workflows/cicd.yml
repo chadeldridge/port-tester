@@ -156,8 +156,10 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Git Checkout
         uses: actions/checkout@v6
-      - name: Run Unit Tests
+      - name: Run Hermetic Tests
         run: cargo test --locked --release
+      - name: Run Networked Tests
+        run: cargo test --locked --release --features network-tests
   audit:
     name: Cargo Audit
     runs-on: ubuntu-latest
