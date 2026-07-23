@@ -7,22 +7,22 @@ See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
 ### Fixed
   - Fixed the changelog CI check to query this repository for the PR submitter and to exempt dependabot PRs. [#18](https://github.com/chadeldridge/port-tester/pull/18) (@chadeldridge)
 ### Added
-  - Added an HTTP GET test mode with `--http` and `--https` flags to both `pt` and `poke`. [#17](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
-  - Added URL parsing of the host argument, splitting out the scheme, port, and path. [#17](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
-  - Added `--http-success` and repeatable `--http-code` flags to control which HTTP status codes count as success. [#17](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
-  - Added `-k`/`--insecure` flag to skip TLS certificate verification for HTTP tests. [#17](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
-  - Added `-L`/`--location` and `--max-redirs` flags to control HTTP redirect following (not followed by default). [#17](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
-  - Added the `connectors::http` connector and the `core::target` (`Target`, `Scheme`) parser. [#17](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
-  - Added CLI integration tests (`tests/cli.rs`) with `assert_cmd`/`predicates`, including `--help` regression snapshots and coverage of the argument-validation error paths. [#17](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
-  - Added a `network-tests` cargo feature to opt in to tests that require live network access. [#17](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
+  - Added an HTTP GET test mode with `--http` and `--https` flags to both `pt` and `poke`. [#19](https://github.com/chadeldridge/port-tester/pull/19) (@chadeldridge)
+  - Added URL parsing of the host argument, splitting out the scheme, port, and path. [#19](https://github.com/chadeldridge/port-tester/pull/19) (@chadeldridge)
+  - Added `--http-success` and repeatable `--http-code` flags to control which HTTP status codes count as success. [#19](https://github.com/chadeldridge/port-tester/pull/19) (@chadeldridge)
+  - Added `-k`/`--insecure` flag to skip TLS certificate verification for HTTP tests. [#19](https://github.com/chadeldridge/port-tester/pull/19) (@chadeldridge)
+  - Added `-L`/`--location` and `--max-redirs` flags to control HTTP redirect following (not followed by default). [#19](https://github.com/chadeldridge/port-tester/pull/19) (@chadeldridge)
+  - Added the `connectors::http` connector and the `core::target` (`Target`, `Scheme`) parser. [#19](https://github.com/chadeldridge/port-tester/pull/19) (@chadeldridge)
+  - Added CLI integration tests (`tests/cli.rs`) with `assert_cmd`/`predicates`, including `--help` regression snapshots and coverage of the argument-validation error paths. [#19](https://github.com/chadeldridge/port-tester/pull/19) (@chadeldridge)
+  - Added a `network-tests` cargo feature to opt in to tests that require live network access. [#19](https://github.com/chadeldridge/port-tester/pull/19) (@chadeldridge)
 ### Changed
-  - Made the `port` argument optional so the scheme determines the default port (80/443) for HTTP tests. [#17](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
-  - Enabled unit tests for the `pt` and `poke` binaries. [#17](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
-  - Gated network-dependent tests behind the `network-tests` feature so the default `cargo test` is hermetic; CI and `pre-release.sh` now run a hermetic pass plus a separate networked pass. [#17](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
-  - Allowed the permissive licenses (`BSD-3-Clause`, `ISC`, `CDLA-Permissive-2.0`) required by the `ureq` TLS stack in `deny.toml`. [#17](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
+  - Made the `port` argument optional so the scheme determines the default port (80/443) for HTTP tests. [#19](https://github.com/chadeldridge/port-tester/pull/19) (@chadeldridge)
+  - Enabled unit tests for the `pt` and `poke` binaries. [#19](https://github.com/chadeldridge/port-tester/pull/19) (@chadeldridge)
+  - Gated network-dependent tests behind the `network-tests` feature so the default `cargo test` is hermetic; CI and `pre-release.sh` now run a hermetic pass plus a separate networked pass. [#19](https://github.com/chadeldridge/port-tester/pull/19) (@chadeldridge)
+  - Allowed the permissive licenses (`BSD-3-Clause`, `ISC`, `CDLA-Permissive-2.0`) required by the `ureq` TLS stack in `deny.toml`. [#19](https://github.com/chadeldridge/port-tester/pull/19) (@chadeldridge)
 ### Deprecated
 ### Removed
-  - Removed `scripts/qa.sh`; its functional coverage moved into the `tests/cli.rs` integration suite. [#17](https://github.com/chadeldridge/port-tester/pull/16) (@chadeldridge)
+  - Removed `scripts/qa.sh`; its functional coverage moved into the `tests/cli.rs` integration suite. [#19](https://github.com/chadeldridge/port-tester/pull/19) (@chadeldridge)
 
 ## [0.2.0] - 2026-06-12
 ### Security
