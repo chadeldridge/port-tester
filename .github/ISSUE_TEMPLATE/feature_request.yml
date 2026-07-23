@@ -15,7 +15,7 @@ body:
       description: >
         What problem does this solve, or what use case does it enable?
         Concrete examples are more persuasive than abstract descriptions.
-      placeholder: "When I run vsleep in a script, I have no way to..."
+      placeholder: "When I run port-tester in a script, I have no way to..."
     validations:
       required: true
 
@@ -26,8 +26,8 @@ body:
         Describe what you'd like to see. If it involves new flags or output,
         show what the interface would look like.
       placeholder: |
-        Add a `--quiet` flag that suppresses all output:
-          vsleep --quiet 30
+        Add a `--silent` flag that suppresses all output:
+          pt --silent 127.0.0.1
     validations:
       required: true
 
