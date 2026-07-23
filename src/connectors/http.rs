@@ -7,6 +7,7 @@
 //! all resolve correctly. `ureq` sends a standard HTTP/1.1 request with `Host`,
 //! `User-Agent`, and `Accept` headers, which is accepted by both modern and legacy servers.
 
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::time::Duration;
 
@@ -82,21 +83,68 @@ pub struct HttpConfig {
     pub timeout: u64,
     /// Skip TLS certificate verification (expired/invalid certs, hostname mismatch, etc.).
     pub insecure: bool,
+    /// Maximum number of redirects to follow. `0` disables redirect following.
+    pub max_redirects: u32,
 }
 
-/// Issue an HTTP `GET` against `host` and record the result into its metrics.
+/// ureq's default maximum number of redirects.
 ///
-/// The request targets `host.name()` (the original hostname), using the port stored on the
-/// [`Host`]. A response whose status code is accepted by [`HttpConfig::success`] records a
-/// [`Status::Success`]; any other status, or a connection/TLS/timeout error, records a
-/// [`Status::Failure`].
+/// Used when the user requests redirect following (`--location`) without an explicit
+/// `--max-redirs`. Mirrors ureq's own default.
+pub const DEFAULT_MAX_REDIRECTS: u32 = 10;
+
+/// Resolve the effective redirect cap from the `--location` / `--max-redirs` flags.
+///
+/// Following is enabled by either flag; `--max-redirs` sets the cap, and `--location`
+/// alone uses [`DEFAULT_MAX_REDIRECTS`]. When neither is given, redirects are not followed
+/// (`0`).
+pub fn resolve_max_redirects(location: bool, max_redirs: Option<u32>) -> u32 {
+    if location || max_redirs.is_some() {
+        max_redirs.unwrap_or(DEFAULT_MAX_REDIRECTS)
+    } else {
+        0
+    }
+}
+
+/// Build a reusable [`Agent`] for the given HTTP configuration.
+///
+/// Construct this once per run and pass it to [`connect`] so repeated attempts reuse the
+/// same TLS setup and connection pool instead of rebuilding them on every attempt.
+///
+/// The agent is configured so that:
+/// - 4xx/5xx responses are returned as responses, not errors (`http_status_as_error(false)`),
+///   leaving the success/failure decision entirely to [`HttpConfig::success`];
+/// - redirects are followed up to [`HttpConfig::max_redirects`] (`0`, the default, means the
+///   test reports the status of the exact endpoint requested rather than wherever it
+///   redirects to);
+/// - TLS certificate verification is skipped when [`HttpConfig::insecure`] is set.
+pub fn build_agent(cfg: &HttpConfig) -> Agent {
+    let config = Agent::config_builder()
+        .timeout_global(Some(Duration::from_secs(cfg.timeout)))
+        .http_status_as_error(false)
+        .max_redirects(cfg.max_redirects)
+        .tls_config(
+            TlsConfig::builder()
+                .disable_verification(cfg.insecure)
+                .build(),
+        )
+        .build();
+    config.into()
+}
+
+/// Issue an HTTP `GET` against `host` using `agent` and record the result into its metrics.
+///
+/// The request is addressed by hostname (`host.name()`) and the port stored on the [`Host`];
+/// DNS resolution, connection, and redirect handling are delegated to `agent`. A response
+/// whose status code is accepted by [`HttpConfig::success`] records a [`Status::Success`];
+/// any other status, or a connection/TLS/timeout error, records a [`Status::Failure`].
 ///
 /// # Examples
 ///
 /// ```no_run
 /// use port_tester::Host;
 /// use port_tester::Scheme;
-/// use port_tester::connectors::http::{connect, HttpConfig, HttpSuccess};
+/// use port_tester::connectors::http::{build_agent, connect, HttpConfig, HttpSuccess};
 ///
 /// let mut host = Host::new("google.com", 443).unwrap();
 /// let cfg = HttpConfig {
@@ -105,27 +153,16 @@ pub struct HttpConfig {
 ///     success: HttpSuccess::Any,
 ///     timeout: 5,
 ///     insecure: false,
+///     max_redirects: 0,
 /// };
-/// connect(1, &mut host, &cfg);
+/// let agent = build_agent(&cfg);
+/// connect(1, &mut host, &cfg, &agent);
 /// assert!(!host.metrics().result(1).unwrap().is_err());
 /// ```
-pub fn connect(seq: u32, host: &mut Host, cfg: &HttpConfig) {
+pub fn connect(seq: u32, host: &mut Host, cfg: &HttpConfig, agent: &Agent) {
     let start = Local::now();
 
     let url = build_url(host.name(), host.port(), cfg.scheme, &cfg.path);
-
-    // Disable ureq's default behavior of turning 4xx/5xx into errors so that the success
-    // policy alone decides the outcome. Any completed response then returns `Ok`.
-    let config = Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(cfg.timeout)))
-        .http_status_as_error(false)
-        .tls_config(
-            TlsConfig::builder()
-                .disable_verification(cfg.insecure)
-                .build(),
-        )
-        .build();
-    let agent: Agent = config.into();
 
     let status = match agent.get(&url).call() {
         Ok(res) => {
@@ -148,8 +185,15 @@ pub fn connect(seq: u32, host: &mut Host, cfg: &HttpConfig) {
     host.record(seq, start, dur, status);
 }
 
-/// Builds the request URL, omitting the port when it matches the scheme default.
+/// Builds the request URL, bracketing IPv6 literals and omitting the port when it matches
+/// the scheme default.
 fn build_url(host: &str, port: u16, scheme: Scheme, path: &str) -> String {
+    // An IPv6 literal contains ':' and must be bracketed to form a valid URL authority.
+    let host = if host.contains(':') {
+        Cow::Owned(format!("[{host}]"))
+    } else {
+        Cow::Borrowed(host)
+    };
     if port == scheme.default_port() {
         format!("{scheme}://{host}{path}")
     } else {
@@ -229,6 +273,28 @@ mod test {
     }
 
     #[test]
+    fn test_resolve_max_redirects() {
+        // Neither flag: no following.
+        assert_eq!(resolve_max_redirects(false, None), 0);
+        // --location alone: ureq's default.
+        assert_eq!(resolve_max_redirects(true, None), DEFAULT_MAX_REDIRECTS);
+        // --max-redirs sets the cap and implies following, with or without --location.
+        assert_eq!(resolve_max_redirects(false, Some(3)), 3);
+        assert_eq!(resolve_max_redirects(true, Some(5)), 5);
+        // An explicit --max-redirs 0 disables following even if --location is present.
+        assert_eq!(resolve_max_redirects(true, Some(0)), 0);
+    }
+
+    #[test]
+    fn test_build_url_brackets_ipv6() {
+        assert_eq!(build_url("::1", 443, Scheme::Https, "/"), "https://[::1]/");
+        assert_eq!(
+            build_url("2001:db8::1", 8443, Scheme::Https, "/health"),
+            "https://[2001:db8::1]:8443/health"
+        );
+    }
+
+    #[test]
     #[cfg_attr(
         not(feature = "network-tests"),
         ignore = "requires network; enable with --features network-tests"
@@ -241,8 +307,10 @@ mod test {
             success: HttpSuccess::Any,
             timeout: 10,
             insecure: false,
+            max_redirects: 0,
         };
-        connect(1, &mut host, &cfg);
+        let agent = build_agent(&cfg);
+        connect(1, &mut host, &cfg, &agent);
         let mr = host.metrics().result(1).unwrap();
         assert!(!mr.is_err());
     }
@@ -263,8 +331,10 @@ mod test {
             success: HttpSuccess::Codes(codes),
             timeout: 10,
             insecure: false,
+            max_redirects: 0,
         };
-        connect(1, &mut host, &cfg);
+        let agent = build_agent(&cfg);
+        connect(1, &mut host, &cfg, &agent);
         let mr = host.metrics().result(1).unwrap();
         assert!(mr.is_err());
     }
@@ -279,8 +349,10 @@ mod test {
             success: HttpSuccess::Any,
             timeout: 1,
             insecure: false,
+            max_redirects: 0,
         };
-        connect(1, &mut host, &cfg);
+        let agent = build_agent(&cfg);
+        connect(1, &mut host, &cfg, &agent);
         let mr = host.metrics().result(1).unwrap();
         assert!(mr.is_err());
     }
@@ -299,8 +371,10 @@ mod test {
             success: HttpSuccess::Any,
             timeout: 10,
             insecure: false,
+            max_redirects: 0,
         };
-        connect(1, &mut host, &cfg);
+        let agent = build_agent(&cfg);
+        connect(1, &mut host, &cfg, &agent);
         assert!(host.metrics().result(1).unwrap().is_err());
     }
 
@@ -318,8 +392,57 @@ mod test {
             success: HttpSuccess::Any,
             timeout: 10,
             insecure: true,
+            max_redirects: 0,
         };
-        connect(1, &mut host, &cfg);
+        let agent = build_agent(&cfg);
+        connect(1, &mut host, &cfg, &agent);
+        assert!(!host.metrics().result(1).unwrap().is_err());
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(feature = "network-tests"),
+        ignore = "requires network; enable with --features network-tests"
+    )]
+    fn test_connect_does_not_follow_redirects() {
+        // Plain HTTP to google.com on port 80 responds with a 3xx redirect to https. With
+        // redirect-following disabled we observe that 3xx directly; if it were followed we
+        // would instead see the final 2xx, so accepting only 3xx proves no redirect occurred.
+        let mut host = Host::new("google.com", 80).unwrap();
+        let cfg = HttpConfig {
+            scheme: Scheme::Http,
+            path: "/".to_string(),
+            success: HttpSuccess::Codes((300u16..=399).collect()),
+            timeout: 10,
+            insecure: false,
+            max_redirects: 0,
+        };
+        let agent = build_agent(&cfg);
+        connect(1, &mut host, &cfg, &agent);
+        assert!(!host.metrics().result(1).unwrap().is_err());
+    }
+
+    #[test]
+    #[cfg_attr(
+        not(feature = "network-tests"),
+        ignore = "requires network; enable with --features network-tests"
+    )]
+    fn test_connect_follows_redirects_when_configured() {
+        // With redirects enabled, the http->https redirect from google.com:80 is followed to
+        // the final 2xx, so accepting only 200 succeeds (the opposite of the no-follow test).
+        let mut host = Host::new("google.com", 80).unwrap();
+        let mut codes = BTreeSet::new();
+        codes.insert(200u16);
+        let cfg = HttpConfig {
+            scheme: Scheme::Http,
+            path: "/".to_string(),
+            success: HttpSuccess::Codes(codes),
+            timeout: 10,
+            insecure: false,
+            max_redirects: DEFAULT_MAX_REDIRECTS,
+        };
+        let agent = build_agent(&cfg);
+        connect(1, &mut host, &cfg, &agent);
         assert!(!host.metrics().result(1).unwrap().is_err());
     }
 }

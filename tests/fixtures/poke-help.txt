@@ -7,14 +7,16 @@ Arguments:
   [PORT]  Port number to connect to. Defaults to a port derived from the scheme (80/443) for HTTP tests, else 443
 
 Options:
-      --http                   Perform an HTTP GET test instead of a plain port-open test
-      --http-code <HTTP_CODE>  Additional HTTP status code to accept as success. May be repeated
-      --http-success           Restrict HTTP success to 2xx/3xx responses
-      --https                  Perform an HTTP GET test over HTTPS regardless of port, scheme, or other indicators
-  -k, --insecure               Allow insecure HTTPS: skip TLS certificate verification (expired/invalid certs, hostname mismatch when testing an IP, etc.). Like curl's --insecure
-  -q, --quiet                  Quiet mode. Suppress per-attempt output and attempt errors only showing sequence numbers and each result as 'ok' or 'fail'
-  -s, --silent                 Silent mode. Suppress output except for errors and final report
-  -t, --timeout <TIMEOUT>      Connection attempt timeout in seconds [default: 5]
-  -v, --verbose...             Verbosity level. Defaults to 1. 1 = warnings 2 = debug 3 = trace
-  -h, --help                   Print help
-  -V, --version                Print version
+      --http                     Perform an HTTP GET test instead of a plain port-open test
+      --http-code <HTTP_CODE>    Additional HTTP status code to accept as success. May be repeated
+      --http-success             Restrict HTTP success to 2xx/3xx responses
+      --https                    Perform an HTTP GET test over HTTPS regardless of port, scheme, or other indicators
+  -k, --insecure                 Allow insecure HTTPS: skip TLS certificate verification (expired/invalid certs, hostname mismatch when testing an IP, etc.). Like curl's --insecure
+  -L, --location                 Follow HTTP redirects (up to --max-redirs, or a default when unset). Like curl's --location
+      --max-redirs <MAX_REDIRS>  Maximum number of redirects to follow. Implies --location. Like curl's --max-redirs
+  -q, --quiet                    Quiet mode. Suppress per-attempt output and attempt errors only showing sequence numbers and each result as 'ok' or 'fail'
+  -s, --silent                   Silent mode. Suppress output except for errors and final report
+  -t, --timeout <TIMEOUT>        Connection attempt timeout in seconds [default: 5]
+  -v, --verbose...               Verbosity level. Defaults to 1. 1 = warnings 2 = debug 3 = trace
+  -h, --help                     Print help
+  -V, --version                  Print version

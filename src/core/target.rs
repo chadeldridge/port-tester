@@ -166,14 +166,22 @@ impl Target {
 /// Splits a leading `http://` or `https://` prefix (case-insensitive) from `input`,
 /// returning the detected scheme and the remainder with its original casing intact.
 fn split_scheme(input: &str) -> (Option<Scheme>, &str) {
-    let lower = input.to_ascii_lowercase();
-    if let Some(rest) = lower.strip_prefix("https://") {
-        (Some(Scheme::Https), &input[input.len() - rest.len()..])
-    } else if let Some(rest) = lower.strip_prefix("http://") {
-        (Some(Scheme::Http), &input[input.len() - rest.len()..])
+    if let Some(rest) = strip_prefix_ci(input, "https://") {
+        (Some(Scheme::Https), rest)
+    } else if let Some(rest) = strip_prefix_ci(input, "http://") {
+        (Some(Scheme::Http), rest)
     } else {
         (None, input)
     }
+}
+
+/// Case-insensitively strips an ASCII `prefix` from `input`, returning the remainder with
+/// its original casing. Returns [`None`] if `input` does not start with `prefix`.
+fn strip_prefix_ci<'a>(input: &'a str, prefix: &str) -> Option<&'a str> {
+    input
+        .get(..prefix.len())
+        .filter(|head| head.eq_ignore_ascii_case(prefix))
+        .map(|_| &input[prefix.len()..])
 }
 
 /// Splits an authority (`host`, `host:port`, or `[ipv6]:port`) into its host and optional

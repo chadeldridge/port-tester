@@ -107,6 +107,15 @@ fn poke_insecure_without_http_mode_is_error() {
         .stderr(predicate::str::contains("require --http"));
 }
 
+#[test]
+fn pt_max_redirs_without_http_mode_is_error() {
+    bin("pt")
+        .args(["--max-redirs", "3", "google.com"])
+        .assert()
+        .code(3)
+        .stderr(predicate::str::contains("require --http"));
+}
+
 // ---------------------------------------------------------------------------
 // Connection behavior — failure paths (hermetic: loopback refuses instantly)
 // ---------------------------------------------------------------------------

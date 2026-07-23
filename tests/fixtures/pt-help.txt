@@ -19,6 +19,10 @@ Options:
           Perform an HTTP GET test over HTTPS regardless of port, scheme, or other indicators
   -k, --insecure
           Allow insecure HTTPS: skip TLS certificate verification (expired/invalid certs, hostname mismatch when testing an IP, etc.). Like curl's --insecure
+  -L, --location
+          Follow HTTP redirects (up to --max-redirs, or a default when unset). Like curl's --location
+      --max-redirs <MAX_REDIRS>
+          Maximum number of redirects to follow. Implies --location. Like curl's --max-redirs
   -i, --interval <INTERVAL>
           Interval between attempts in seconds [default: 1]
       --json

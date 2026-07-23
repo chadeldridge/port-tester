@@ -47,6 +47,10 @@ fn main() {
     })
     .expect("Error setting Ctrl-C handler");
 
+    // Build the HTTP agent once (when in HTTP mode) so every attempt reuses the same TLS
+    // setup and connection pool instead of rebuilding them each iteration.
+    let http_agent = cli.http.as_ref().map(http::build_agent);
+
     // Get an iterator for the number of attempts. If count is 0, it will be infinite.
     let iter = if cli.args.count == 0 {
         debug!("attempts: infinite");
@@ -67,9 +71,9 @@ fn main() {
         );
 
         // Connect to the target and record metrics.
-        match &cli.http {
-            Some(cfg) => http::connect(i, &mut host.lock().unwrap(), cfg),
-            None => port_open::connect(i, &mut host.lock().unwrap(), cli.args.timeout),
+        match (&cli.http, &http_agent) {
+            (Some(cfg), Some(agent)) => http::connect(i, &mut host.lock().unwrap(), cfg, agent),
+            _ => port_open::connect(i, &mut host.lock().unwrap(), cli.args.timeout),
         }
 
         // Use a block so the MutexGuard is dropped before the intermediate report and sleep,

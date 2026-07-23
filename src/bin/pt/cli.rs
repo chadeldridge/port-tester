@@ -1,7 +1,7 @@
 use log::debug;
 use port_tester::Target;
 use port_tester::Verbosity;
-use port_tester::connectors::http::{HttpConfig, HttpSuccess};
+use port_tester::connectors::http::{HttpConfig, HttpSuccess, resolve_max_redirects};
 
 use clap::{ArgAction, CommandFactory, Parser, value_parser};
 
@@ -9,25 +9,6 @@ const DEFAULT_COUNT: u32 = 0;
 const DEFAULT_INTERVAL: u64 = 1;
 const DEFAULT_PORT: u16 = 443;
 const DEFAULT_TIMEOUT: u64 = 5;
-
-#[macro_export]
-macro_rules! count_true_u8 {
-    () => (0 as u8);
-    ($elem:expr; $n:expr) => (
-        let v = vec![$elem];
-        _cout_true(v)
-    );
-    ($($x:expr),+$(,)?) => (
-        {
-            let v = vec![$($x),+];
-            _count_true(v)
-        }
-    );
-}
-
-fn _count_true(vec: std::vec::Vec<bool>) -> usize {
-    vec.into_iter().filter(|&b| b).count()
-}
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Parser)]
 //#[command(disable_help_flag = true, version, about, long_about = None)]
@@ -64,6 +45,12 @@ pub struct Args {
     /// hostname mismatch when testing an IP, etc.). Like curl's --insecure.
     #[arg(short = 'k', long, default_value_t = false)]
     pub insecure: bool,
+    /// Follow HTTP redirects (up to --max-redirs, or a default when unset). Like curl's --location.
+    #[arg(short = 'L', long, default_value_t = false)]
+    pub location: bool,
+    /// Maximum number of redirects to follow. Implies --location. Like curl's --max-redirs.
+    #[arg(long = "max-redirs", value_parser = value_parser!(u32))]
+    pub max_redirs: Option<u32>,
     /// Interval between attempts in seconds.
     #[arg(short, long, default_value_t = DEFAULT_INTERVAL)]
     pub interval: u64,
@@ -133,14 +120,8 @@ impl Cli {
             http: None,
         };
 
-        let is_verbose = !matches!(&c.args.verbose, 0);
-
-        // Print help and exit if conflicting arguments are given.
-        if count_true_u8!(c.args.silent, c.args.quiet, is_verbose) > 1 {
-            eprintln!("You may only specify one of: --quiet, --silent, --verbose");
-            let _ = Args::command().print_help();
-            std::process::exit(3);
-        }
+        // Conflicting verbosity flags (--quiet/--silent/--verbose) are rejected by clap's
+        // arg group at parse time, so no manual check is needed here.
 
         // Parse the host argument into its scheme, host, port, and path components.
         let target = match Target::parse(&c.args.host) {
@@ -155,8 +136,16 @@ impl Cli {
         let http_mode = c.args.http || c.args.https || target.scheme().is_some();
 
         // HTTP-only flags require an HTTP test.
-        if !http_mode && (c.args.http_success || !c.args.http_code.is_empty() || c.args.insecure) {
-            eprintln!("--http-success, --http-code, and --insecure require --http or --https");
+        if !http_mode
+            && (c.args.http_success
+                || !c.args.http_code.is_empty()
+                || c.args.insecure
+                || c.args.location
+                || c.args.max_redirs.is_some())
+        {
+            eprintln!(
+                "--http-success, --http-code, --insecure, --location, and --max-redirs require --http or --https"
+            );
             let _ = Args::command().print_help();
             std::process::exit(3);
         }
@@ -172,6 +161,7 @@ impl Cli {
                 success: HttpSuccess::from_flags(c.args.http_success, &c.args.http_code),
                 timeout: c.args.timeout,
                 insecure: c.args.insecure,
+                max_redirects: resolve_max_redirects(c.args.location, c.args.max_redirs),
             });
         } else {
             c.port = target.port().or(c.args.port).unwrap_or(DEFAULT_PORT);
@@ -203,18 +193,6 @@ impl Cli {
 mod test {
     use super::*;
     use port_tester::Scheme;
-
-    #[test]
-    fn test_count_true() {
-        let v = vec![true, false, true];
-        assert_eq!(_count_true(v), 2);
-    }
-
-    #[test]
-    fn test_count_true_u8() {
-        let c = count_true_u8!(true, false, true);
-        assert_eq!(c, 2);
-    }
 
     #[test]
     fn test_cli_new() {
@@ -307,6 +285,26 @@ mod test {
         // Without --insecure it defaults to secure.
         let cli = Cli::new(Args::try_parse_from(vec!["pt", "--https", "google.com"]).unwrap());
         assert!(!cli.http.expect("http mode").insecure);
+    }
+
+    #[test]
+    fn test_redirect_flags() {
+        // Default: redirects are not followed.
+        let cli = Cli::new(Args::try_parse_from(vec!["pt", "--http", "google.com"]).unwrap());
+        assert_eq!(cli.http.expect("http mode").max_redirects, 0);
+
+        // --location: ureq's default cap.
+        let cli = Cli::new(Args::try_parse_from(vec!["pt", "--http", "-L", "google.com"]).unwrap());
+        assert_eq!(
+            cli.http.expect("http mode").max_redirects,
+            port_tester::connectors::http::DEFAULT_MAX_REDIRECTS
+        );
+
+        // --max-redirs implies following with the given cap.
+        let cli = Cli::new(
+            Args::try_parse_from(vec!["pt", "--http", "--max-redirs", "3", "google.com"]).unwrap(),
+        );
+        assert_eq!(cli.http.expect("http mode").max_redirects, 3);
     }
 
     #[test]

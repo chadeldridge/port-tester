@@ -48,7 +48,10 @@ fn main() {
 
     // Connect to the target and record metrics.
     match &cli.http {
-        Some(cfg) => http::connect(1, &mut host, cfg),
+        Some(cfg) => {
+            let agent = http::build_agent(cfg);
+            http::connect(1, &mut host, cfg, &agent);
+        }
         None => port_open::connect(1, &mut host, cli.args.timeout),
     }
 

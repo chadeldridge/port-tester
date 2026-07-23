@@ -28,6 +28,10 @@ Options:
           Perform an HTTP GET test over HTTPS regardless of port, scheme, or other indicators
   -k, --insecure
           Allow insecure HTTPS: skip TLS certificate verification (expired/invalid certs, hostname mismatch when testing an IP, etc.). Like curl's --insecure
+  -L, --location
+          Follow HTTP redirects (up to --max-redirs, or a default when unset). Like curl's --location
+      --max-redirs <MAX_REDIRS>
+          Maximum number of redirects to follow. Implies --location. Like curl's --max-redirs
   -i, --interval <INTERVAL>
           Interval between attempts in seconds [default: 1]
       --json
@@ -128,6 +132,19 @@ testing an IP directly over HTTPS). Like curl's `--insecure`.
 fail: io: invalid peer certificate: certificate expired: ...
 1
 ❯ pt --https -k -c 1 expired.badssl.com; echo $?
+ok
+0
+```
+
+By default redirects are not followed, so the test reports the status of the exact endpoint
+requested (a target's own 3xx is visible). Pass `-L`/`--location` to follow redirects (up to
+a default cap), or `--max-redirs <N>` to follow up to `N`.
+
+```
+❯ pt --http --http-code 301 -c 1 google.com; echo $?
+ok
+0
+❯ pt --http -L -c 1 google.com; echo $?
 ok
 0
 ```
