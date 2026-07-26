@@ -52,7 +52,7 @@ impl HttpSuccess {
     /// assert!(policy.accepts(418));
     /// assert!(!policy.accepts(500));
     /// ```
-    pub fn from_flags(restrict_success: bool, codes: &[u16]) -> Self {
+    pub fn new(restrict_success: bool, codes: &[u16]) -> Self {
         if !restrict_success && codes.is_empty() {
             return HttpSuccess::Any;
         }
@@ -248,7 +248,7 @@ mod test {
     #[test]
     fn test_http_success_default_any() {
         assert_eq!(HttpSuccess::default(), HttpSuccess::Any);
-        assert_eq!(HttpSuccess::from_flags(false, &[]), HttpSuccess::Any);
+        assert_eq!(HttpSuccess::new(false, &[]), HttpSuccess::Any);
         assert!(HttpSuccess::Any.accepts(200));
         assert!(HttpSuccess::Any.accepts(404));
         assert!(HttpSuccess::Any.accepts(500));
@@ -256,7 +256,7 @@ mod test {
 
     #[test]
     fn test_http_success_restrict() {
-        let policy = HttpSuccess::from_flags(true, &[]);
+        let policy = HttpSuccess::new(true, &[]);
         assert!(policy.accepts(200));
         assert!(policy.accepts(301));
         assert!(policy.accepts(399));
@@ -267,7 +267,7 @@ mod test {
 
     #[test]
     fn test_http_success_codes_only() {
-        let policy = HttpSuccess::from_flags(false, &[404, 500]);
+        let policy = HttpSuccess::new(false, &[404, 500]);
         assert!(policy.accepts(404));
         assert!(policy.accepts(500));
         assert!(!policy.accepts(200));
@@ -275,7 +275,7 @@ mod test {
 
     #[test]
     fn test_http_success_union() {
-        let policy = HttpSuccess::from_flags(true, &[404, 500]);
+        let policy = HttpSuccess::new(true, &[404, 500]);
         assert!(policy.accepts(200));
         assert!(policy.accepts(404));
         assert!(policy.accepts(500));
@@ -285,7 +285,7 @@ mod test {
     #[test]
     fn test_http_success_dedup() {
         // 200 and 250 already fall in the 2xx/3xx range, so the set must not grow.
-        let policy = HttpSuccess::from_flags(true, &[200, 250, 200]);
+        let policy = HttpSuccess::new(true, &[200, 250, 200]);
         match policy {
             HttpSuccess::Codes(set) => assert_eq!(set.len(), 200),
             HttpSuccess::Any => panic!("expected Codes"),

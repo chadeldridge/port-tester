@@ -158,7 +158,7 @@ impl Cli {
             c.http = Some(HttpConfig {
                 scheme,
                 path: target.path().to_string(),
-                success: HttpSuccess::from_flags(c.args.http_success, &c.args.http_code),
+                success: HttpSuccess::new(c.args.http_success, &c.args.http_code),
                 timeout: c.args.timeout,
                 insecure: c.args.insecure,
                 max_redirects: resolve_max_redirects(c.args.location, c.args.max_redirs),
