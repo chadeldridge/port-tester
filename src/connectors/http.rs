@@ -10,7 +10,7 @@
 use std::collections::BTreeSet;
 use std::time::Duration;
 
-use chrono::Local;
+use chrono::{DateTime, Local, TimeDelta};
 use ureq::Agent;
 use ureq::tls::TlsConfig;
 
@@ -183,9 +183,26 @@ pub fn build_agent(cfg: &HttpConfig) -> Agent {
 /// assert!(!host.metrics().result(1).unwrap().is_err());
 /// ```
 pub fn connect(seq: u32, host: &mut Host, cfg: &HttpConfig, agent: &Agent) {
+    let (start, dur, status) = attempt(host.name(), host.port(), cfg, agent);
+    host.record(seq, start, dur, status);
+}
+
+/// Issue an HTTP `GET` and return its timing and outcome without touching a [`Host`].
+///
+/// This does the blocking request but records nothing, so callers can run it without
+/// holding any lock and record the result separately. `host` is the bare hostname/IP and
+/// `port` the target port (used to build the request URL). A response whose status code is
+/// accepted by [`HttpConfig::success`] yields a [`Status::Success`]; any other status, or a
+/// connection/TLS/timeout error, yields a [`Status::Failure`].
+pub fn attempt(
+    host: &str,
+    port: u16,
+    cfg: &HttpConfig,
+    agent: &Agent,
+) -> (DateTime<Local>, TimeDelta, Status) {
     let start = Local::now();
 
-    let url = build_url(host.name(), host.port(), cfg.scheme, &cfg.path);
+    let url = build_url(host, port, cfg.scheme, &cfg.path);
 
     let status = match agent.get(&url).call() {
         Ok(res) => {
@@ -205,7 +222,7 @@ pub fn connect(seq: u32, host: &mut Host, cfg: &HttpConfig, agent: &Agent) {
     };
 
     let dur = Local::now() - start;
-    host.record(seq, start, dur, status);
+    (start, dur, status)
 }
 
 /// Builds the request URL, bracketing IPv6 literals and omitting the port when it matches

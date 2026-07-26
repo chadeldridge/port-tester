@@ -42,6 +42,7 @@ fn main() {
     // Create a handler that will attempt to print a metrics report when we receive a Ctrl-C.
     ctrlc::set_handler(move || {
         //println!("\nInterrupted! Generating report...");
+        println!();
         print_report(&cli_clone, &host_clone.lock().unwrap());
         std::process::exit(0);
     })
@@ -76,11 +77,24 @@ fn main() {
             );
         }
 
-        // Connect to the target and record metrics.
-        match (&cli.http, &http_agent) {
-            (Some(cfg), Some(agent)) => http::connect(i, &mut host.lock().unwrap(), cfg, agent),
-            _ => port_open::connect(i, &mut host.lock().unwrap(), cli.args.timeout),
-        }
+        // Run the (blocking) attempt WITHOUT holding the host lock, then record the result
+        // under a short lock. Holding the lock across the network wait would block the
+        // Ctrl-C handler (which locks the host to print its report) until the attempt timed
+        // out, so an interrupt could not stop a hanging attempt promptly.
+        let (start, dur, status) = match (&cli.http, &http_agent) {
+            (Some(cfg), Some(agent)) => {
+                let (name, port) = {
+                    let h = host.lock().unwrap();
+                    (h.name().to_string(), h.port())
+                };
+                http::attempt(&name, port, cfg, agent)
+            }
+            _ => {
+                let addrs = { host.lock().unwrap().addrs().to_vec() };
+                port_open::attempt(&addrs, cli.args.timeout)
+            }
+        };
+        host.lock().unwrap().record(i, start, dur, status);
 
         // Use a block so the MutexGuard is dropped before the intermediate report and sleep,
         // otherwise those sites deadlock trying to re-acquire the same lock.
