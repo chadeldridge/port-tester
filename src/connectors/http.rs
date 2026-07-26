@@ -41,13 +41,13 @@ impl HttpSuccess {
     /// ```
     /// use port_tester::connectors::http::HttpSuccess;
     ///
-    /// let policy = HttpSuccess::from_flags(false, &[]);
+    /// let policy = HttpSuccess::new(false, &[]);
     /// assert_eq!(policy, HttpSuccess::Any);
     /// assert!(policy.accepts(200));
     /// assert!(policy.accepts(418));
     /// assert!(policy.accepts(500));
     ///
-    /// let policy = HttpSuccess::from_flags(true, &[418]);
+    /// let policy = HttpSuccess::new(true, &[418]);
     /// assert!(policy.accepts(200));
     /// assert!(policy.accepts(418));
     /// assert!(!policy.accepts(500));
