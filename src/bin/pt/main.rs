@@ -62,13 +62,19 @@ fn main() {
     };
 
     for i in iter.enumerate().map(|(i, _)| i as u32 + 1) {
-        debug!(
-            "attempt: {}, ip: {}, port: {}, timeout: {}",
-            i,
-            host.lock().unwrap().ip(),
-            host.lock().unwrap().port(),
-            cli.args.timeout
-        );
+        // Lock once for the attempt log line. Locking the same mutex twice in a single
+        // statement (e.g. `host.lock()...ip()` and `host.lock()...port()`) deadlocks,
+        // because both temporary guards live until the end of the statement.
+        {
+            let h = host.lock().unwrap();
+            debug!(
+                "attempt: {}, ip: {}, port: {}, timeout: {}",
+                i,
+                h.ip(),
+                h.port(),
+                cli.args.timeout
+            );
+        }
 
         // Connect to the target and record metrics.
         match (&cli.http, &http_agent) {
