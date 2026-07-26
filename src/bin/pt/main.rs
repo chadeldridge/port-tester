@@ -42,6 +42,7 @@ fn main() {
     // Create a handler that will attempt to print a metrics report when we receive a Ctrl-C.
     ctrlc::set_handler(move || {
         //println!("\nInterrupted! Generating report...");
+        println!();
         print_report(&cli_clone, &host_clone.lock().unwrap());
         std::process::exit(0);
     })
@@ -62,19 +63,38 @@ fn main() {
     };
 
     for i in iter.enumerate().map(|(i, _)| i as u32 + 1) {
-        debug!(
-            "attempt: {}, ip: {}, port: {}, timeout: {}",
-            i,
-            host.lock().unwrap().ip(),
-            host.lock().unwrap().port(),
-            cli.args.timeout
-        );
-
-        // Connect to the target and record metrics.
-        match (&cli.http, &http_agent) {
-            (Some(cfg), Some(agent)) => http::connect(i, &mut host.lock().unwrap(), cfg, agent),
-            _ => port_open::connect(i, &mut host.lock().unwrap(), cli.args.timeout),
+        // Lock once for the attempt log line. Locking the same mutex twice in a single
+        // statement (e.g. `host.lock()...ip()` and `host.lock()...port()`) deadlocks,
+        // because both temporary guards live until the end of the statement.
+        {
+            let h = host.lock().unwrap();
+            debug!(
+                "attempt: {}, ip: {}, port: {}, timeout: {}",
+                i,
+                h.ip(),
+                h.port(),
+                cli.args.timeout
+            );
         }
+
+        // Run the (blocking) attempt WITHOUT holding the host lock, then record the result
+        // under a short lock. Holding the lock across the network wait would block the
+        // Ctrl-C handler (which locks the host to print its report) until the attempt timed
+        // out, so an interrupt could not stop a hanging attempt promptly.
+        let (start, dur, status) = match (&cli.http, &http_agent) {
+            (Some(cfg), Some(agent)) => {
+                let (name, port) = {
+                    let h = host.lock().unwrap();
+                    (h.name().to_string(), h.port())
+                };
+                http::attempt(&name, port, cfg, agent)
+            }
+            _ => {
+                let addrs = { host.lock().unwrap().addrs().to_vec() };
+                port_open::attempt(&addrs, cli.args.timeout)
+            }
+        };
+        host.lock().unwrap().record(i, start, dur, status);
 
         // Use a block so the MutexGuard is dropped before the intermediate report and sleep,
         // otherwise those sites deadlock trying to re-acquire the same lock.

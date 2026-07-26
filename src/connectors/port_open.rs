@@ -1,20 +1,23 @@
-use chrono::Local;
+use chrono::{DateTime, Local, TimeDelta};
 
 use crate::Host;
 use crate::core::error::*;
 use crate::core::metrics::Status;
 
-use std::net::TcpStream;
+use std::net::{SocketAddr, TcpStream};
 
-// Fully open and close the port and report any errors. Does not test any protocol information other
-// than the ability to establish a TCP connection to the specified port.
-pub fn connect(seq: u32, host: &mut Host, timeout: u64) {
+/// Perform a port-open attempt against `addrs` and return its timing and outcome.
+///
+/// This does the blocking network work but does not touch a [`Host`], so callers can run
+/// it without holding any lock and record the result separately. Each address is tried in
+/// order until one connects; on total failure the last error is reported.
+pub fn attempt(addrs: &[SocketAddr], timeout: u64) -> (DateTime<Local>, TimeDelta, Status) {
     let start = Local::now();
     let mut last_err = None;
     let mut success = false;
 
     // Attempt to connect to each resolved address until one succeeds.
-    for addr in host.addrs() {
+    for addr in addrs {
         match TcpStream::connect_timeout(addr, std::time::Duration::from_secs(timeout)) {
             Ok(_) => {
                 success = true;
@@ -25,16 +28,19 @@ pub fn connect(seq: u32, host: &mut Host, timeout: u64) {
     }
 
     let dur = Local::now() - start;
-    if success {
-        host.record(seq, start, dur, Status::Success);
+    let status = if success {
+        Status::Success
     } else {
-        host.record(
-            seq,
-            start,
-            dur,
-            Status::new(false, last_err.map(|e| Error::new(SourceError::Io(e)))),
-        );
-    }
+        Status::new(false, last_err.map(|e| Error::new(SourceError::Io(e))))
+    };
+    (start, dur, status)
+}
+
+// Fully open and close the port and report any errors. Does not test any protocol information other
+// than the ability to establish a TCP connection to the specified port.
+pub fn connect(seq: u32, host: &mut Host, timeout: u64) {
+    let (start, dur, status) = attempt(host.addrs(), timeout);
+    host.record(seq, start, dur, status);
 }
 
 #[cfg(test)]

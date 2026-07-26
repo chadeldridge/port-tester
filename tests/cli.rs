@@ -137,6 +137,18 @@ fn poke_closed_port_exits_failure() {
         .code(1);
 }
 
+#[test]
+fn pt_verbose_debug_does_not_deadlock() {
+    // -vvv enables debug! logging, which previously double-locked the host mutex and
+    // hung the process. 127.0.0.1:1 is refused instantly; the run must complete, not
+    // hang, so the assert_cmd timeout fails the test if the deadlock ever returns.
+    bin("pt")
+        .args(["127.0.0.1", "1", "-vvv", "-c", "1", "-t", "1"])
+        .timeout(std::time::Duration::from_secs(10))
+        .assert()
+        .code(1);
+}
+
 // ---------------------------------------------------------------------------
 // Connection behavior — success/JSON/HTTP paths (require live network)
 // ---------------------------------------------------------------------------
