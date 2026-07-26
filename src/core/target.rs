@@ -11,6 +11,7 @@ use std::net::IpAddr;
 
 /// The URL scheme used for an HTTP test.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 pub enum Scheme {
     Http,
     Https,

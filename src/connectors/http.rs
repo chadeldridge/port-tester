@@ -7,7 +7,6 @@
 //! all resolve correctly. `ureq` sends a standard HTTP/1.1 request with `Host`,
 //! `User-Agent`, and `Accept` headers, which is accepted by both modern and legacy servers.
 
-use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::time::Duration;
 
@@ -42,7 +41,11 @@ impl HttpSuccess {
     /// ```
     /// use port_tester::connectors::http::HttpSuccess;
     ///
-    /// assert_eq!(HttpSuccess::from_flags(false, &[]), HttpSuccess::Any);
+    /// let policy = HttpSuccess::from_flags(false, &[]);
+    /// assert_eq!(policy, HttpSuccess::Any);
+    /// assert!(policy.accepts(200));
+    /// assert!(policy.accepts(418));
+    /// assert!(policy.accepts(500));
     ///
     /// let policy = HttpSuccess::from_flags(true, &[418]);
     /// assert!(policy.accepts(200));
@@ -53,12 +56,32 @@ impl HttpSuccess {
         if !restrict_success && codes.is_empty() {
             return HttpSuccess::Any;
         }
+        let mut p = if restrict_success {
+            HttpSuccess::new_success_or_redir()
+        } else {
+            HttpSuccess::Codes(BTreeSet::new())
+        };
+        p.add_codes(codes);
+        p
+    }
+
+    /// Returns a policy that only accepts HTTP status codes in the 200-399 range.
+    pub fn new_success_or_redir() -> Self {
         let mut set = BTreeSet::new();
-        if restrict_success {
-            set.extend(200u16..=399);
-        }
-        set.extend(codes.iter().copied());
+        set.extend(200u16..=399);
         HttpSuccess::Codes(set)
+    }
+
+    /// Adds the given status codes to the set of accepted codes.
+    ///
+    /// This only ever widens the accepted set. On [`HttpSuccess::Any`] the call is a
+    /// deliberate no-op, because `Any` already accepts every status code.
+    pub fn add_codes(&mut self, codes: &[u16]) {
+        match self {
+            HttpSuccess::Codes(set) => set.extend(codes.iter().copied()),
+            // `Any` already accepts every code; adding specific codes changes nothing.
+            HttpSuccess::Any => {}
+        }
     }
 
     /// Returns `true` if `code` is accepted by this policy.
@@ -73,7 +96,7 @@ impl HttpSuccess {
 /// Configuration for a single HTTP GET test.
 #[derive(Clone, Debug)]
 pub struct HttpConfig {
-    /// Scheme to request with.
+    /// Scheme to request with, e.g. `http` or `https`.
     pub scheme: Scheme,
     /// Request path, e.g. `/` or `/health`.
     pub path: String,
@@ -189,15 +212,15 @@ pub fn connect(seq: u32, host: &mut Host, cfg: &HttpConfig, agent: &Agent) {
 /// the scheme default.
 fn build_url(host: &str, port: u16, scheme: Scheme, path: &str) -> String {
     // An IPv6 literal contains ':' and must be bracketed to form a valid URL authority.
-    let host = if host.contains(':') {
-        Cow::Owned(format!("[{host}]"))
+    let auth = if host.contains(':') {
+        format!("[{host}]")
     } else {
-        Cow::Borrowed(host)
+        host.to_string()
     };
     if port == scheme.default_port() {
-        format!("{scheme}://{host}{path}")
+        format!("{scheme}://{auth}{path}")
     } else {
-        format!("{scheme}://{host}:{port}{path}")
+        format!("{scheme}://{auth}:{port}{path}")
     }
 }
 
@@ -250,6 +273,35 @@ mod test {
             HttpSuccess::Codes(set) => assert_eq!(set.len(), 200),
             HttpSuccess::Any => panic!("expected Codes"),
         }
+    }
+
+    #[test]
+    fn test_new_success_or_redirect() {
+        let policy = HttpSuccess::new_success_or_redir();
+        assert!(policy.accepts(200));
+        assert!(policy.accepts(301));
+        assert!(!policy.accepts(404));
+    }
+
+    #[test]
+    fn test_add_codes() {
+        let mut policy = HttpSuccess::new_success_or_redir();
+        policy.add_codes(&[404, 500]);
+        assert!(policy.accepts(200));
+        assert!(policy.accepts(301));
+        assert!(policy.accepts(404));
+        assert!(policy.accepts(500));
+        assert!(!policy.accepts(418));
+    }
+
+    #[test]
+    fn test_add_codes_on_any_is_noop() {
+        let mut policy = HttpSuccess::Any;
+        policy.add_codes(&[404, 500]);
+        // `Any` already accepts every code, so it stays `Any` and keeps accepting all.
+        assert_eq!(policy, HttpSuccess::Any);
+        assert!(policy.accepts(200));
+        assert!(policy.accepts(404));
     }
 
     #[test]
