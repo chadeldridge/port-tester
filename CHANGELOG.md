@@ -5,8 +5,16 @@ See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
 ## [Unreleased]
 ### Security
 ### Fixed
-  - Fixed `pt` hanging when run with debug logging (`-vvv`), caused by locking the host mutex twice in a single statement. #20 (@chadeldridge)
-  - Fixed `pt` not responding to Ctrl-C during a slow or hanging connection attempt; attempts now run without holding the host lock so an interrupt reports and exits immediately. #20 (@chadeldridge)
+### Added
+### Changed
+### Deprecated
+### Removed
+
+## [0.3.0] - 2026-07-27
+### Security
+### Fixed
+  - Fixed `pt` hanging when run with debug logging (`-vvv`), caused by locking the host mutex twice in a single statement. [#20](https://github.com/chadeldridge/port-tester/pull/20) (@chadeldridge)
+  - Fixed `pt` not responding to Ctrl-C during a slow or hanging connection attempt; attempts now run without holding the host lock so an interrupt reports and exits immediately. [#20](https://github.com/chadeldridge/port-tester/pull/20) (@chadeldridge)
   - Fixed the changelog CI check to query this repository for the PR submitter and to exempt dependabot PRs. [#18](https://github.com/chadeldridge/port-tester/pull/18) (@chadeldridge)
 ### Added
   - Added an HTTP GET test mode with `--http` and `--https` flags to both `pt` and `poke`. [#19](https://github.com/chadeldridge/port-tester/pull/19) (@chadeldridge)
@@ -79,6 +87,7 @@ See [Contributing](CONTRIBUTING.md) for details on how to add to the Changelog.
 ### Deprecated
 ### Removed
 
-[Unreleased]: https://github.com/chadeldridge/port-tester/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/chadeldridge/port-tester/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/chadeldridge/port-tester/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/chadeldridge/port-tester/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/chadeldridge/port-tester/compare/f30cf8c...v0.1.0
